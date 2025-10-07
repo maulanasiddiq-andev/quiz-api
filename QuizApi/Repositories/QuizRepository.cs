@@ -191,6 +191,7 @@ namespace QuizApi.Repositories
                         .Select(a => a)
                         .ToList(),
                     CreatedBy = q.CreatedBy,
+                    QuestionOrder = q.QuestionOrder,
                     CreatedTime = q.CreatedTime,
                     DeletedBy = q.DeletedBy,
                     DeletedTime = q.DeletedTime,
