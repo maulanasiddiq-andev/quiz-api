@@ -7,6 +7,7 @@ using QuizApi.DTOs.QuizExam;
 using QuizApi.DTOs.Request;
 using QuizApi.Exceptions;
 using QuizApi.Extensions;
+using QuizApi.Helpers;
 using QuizApi.Repositories;
 using QuizApi.Responses;
 using QuizApi.Services;
@@ -21,6 +22,7 @@ namespace QuizApi.Controllers
     {
         private readonly QuizRepository quizRepository;
         private readonly ActivityLogService activityLogService;
+        private readonly FileHelper fileHelper;
         public QuizController(
             QuizRepository quizRepository,
             ActivityLogService activityLogService
@@ -28,6 +30,7 @@ namespace QuizApi.Controllers
         {
             this.quizRepository = quizRepository;
             this.activityLogService = activityLogService;
+            fileHelper = new FileHelper();
         }
 
         [HttpGet]
@@ -68,6 +71,42 @@ namespace QuizApi.Controllers
                 await quizRepository.CreateDataAsync(quizDto);
 
                 return new BaseResponse(true, "Kuis berhasil ditambahkan", null);
+            }
+            catch (KnownException ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ex.Message, null);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
+        [HttpPost]
+        [Route("upload-image")]
+        public async Task<BaseResponse> UploadQuizImageAsync([FromForm] UploadQuizImageDto uploadQuizImageDto)
+        {
+            try
+            {
+                if (uploadQuizImageDto == null)
+                {
+                    throw new KnownException(ErrorMessageConstant.MethodParameterNull);
+                }
+
+                var validator = new UploadQuizImageValidator();
+                var results = validator.Validate(uploadQuizImageDto);
+                if (!results.IsValid)
+                {
+                    var messages = results.Errors.Select(x => x.ErrorMessage).ToList();
+                    return new BaseResponse(false, messages);
+                }
+
+                var imageUrl = await fileHelper.SaveFile(uploadQuizImageDto.Image!, uploadQuizImageDto.Directory);
+                return new BaseResponse(true, "", imageUrl);
             }
             catch (KnownException ex)
             {
