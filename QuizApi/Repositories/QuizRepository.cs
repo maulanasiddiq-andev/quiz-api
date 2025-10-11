@@ -6,6 +6,7 @@ using QuizApi.DTOs.Quiz;
 using QuizApi.DTOs.QuizExam;
 using QuizApi.DTOs.QuizHistory;
 using QuizApi.DTOs.Request;
+using QuizApi.DTOs.TakeQuiz;
 using QuizApi.Exceptions;
 using QuizApi.Extensions;
 using QuizApi.Models;
@@ -39,7 +40,7 @@ namespace QuizApi.Repositories
         {
             IQueryable<QuizModel> listQuizzesQuery = dBContext.Quiz
                 .Where(x => x.RecordStatus == RecordStatusConstant.Active)
-                .Select(MapQuizWithQuestionsCount);
+                .Select(MapQuiz);
 
             #region Ordering
             string orderBy = searchRequest.OrderBy;
@@ -132,6 +133,30 @@ namespace QuizApi.Repositories
             return quizDto;
         }
 
+        public async Task<TakeQuizDto> GetQuizWithQuestionsByIdAsync(string quizId)
+        {
+            QuizModel? quiz = await dBContext.Quiz
+                .Where(x => x.QuizId == quizId && x.RecordStatus == RecordStatusConstant.Active)
+                .Include(x => x.Questions.OrderBy(y => y.QuestionOrder)).ThenInclude(y => y.Answers)
+                .FirstOrDefaultAsync();
+
+            if (quiz == null)
+            {
+                throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            TakeQuizDto quizDto = mapper.Map<TakeQuizDto>(quiz);
+
+            foreach (var question in quizDto.Questions)
+            {
+                question.Answers = question.Answers.OrderBy(x => x.AnswerOrder).ToList();
+            }
+
+            quizDto.QuestionsCount = quizDto.Questions.Count();
+
+            return quizDto;
+        }
+
         public async Task DeleteDataAsync(string id)
         {
             QuizModel? quiz = await GetActiveQuizByIdAsync(id);
@@ -151,62 +176,62 @@ namespace QuizApi.Repositories
         {
             QuizModel? quiz = await dBContext.Quiz
                 .Where(x => x.QuizId.Equals(id) && x.RecordStatus == RecordStatusConstant.Active)
-                .Select(MapQuizWithQuestions)
+                .Select(MapQuiz)
                 .FirstOrDefaultAsync();
 
             return quiz;
         }
 
-        private Expression<Func<QuizModel, QuizModel>> MapQuizWithQuestions = quiz => new QuizModel
-        {
-            QuizId = quiz.QuizId,
-            Category = quiz.Category,
-            CategoryId = quiz.CategoryId,
-            CreatedBy = quiz.CreatedBy,
-            CreatedTime = quiz.CreatedTime,
-            DeletedBy = quiz.DeletedBy,
-            DeletedTime = quiz.DeletedTime,
-            Description = quiz.Description,
-            ImageUrl = quiz.ImageUrl,
-            ModifiedBy = quiz.ModifiedBy,
-            ModifiedTime = quiz.ModifiedTime,
-            RecordStatus = quiz.RecordStatus,
-            Time = quiz.Time,
-            Title = quiz.Title,
-            User = quiz.User,
-            UserId = quiz.UserId,
-            Version = quiz.Version,
-            Questions = quiz.Questions
-                .Where(q => q.RecordStatus == RecordStatusConstant.Active)
-                .OrderBy(x => x.QuestionOrder)
-                .Select(q => new QuestionModel
-                {
-                    QuestionId = q.QuestionId,
-                    QuizId = q.QuizId,
-                    Text = q.Text,
-                    RecordStatus = q.RecordStatus,
-                    Answers = q.Answers
-                        .Where(a => a.RecordStatus == RecordStatusConstant.Active)
-                        .OrderBy(a => a.AnswerOrder)
-                        .Select(a => a)
-                        .ToList(),
-                    CreatedBy = q.CreatedBy,
-                    QuestionOrder = q.QuestionOrder,
-                    CreatedTime = q.CreatedTime,
-                    DeletedBy = q.DeletedBy,
-                    DeletedTime = q.DeletedTime,
-                    Description = q.Description,
-                    ImageUrl = q.ImageUrl,
-                    ModifiedBy = q.ModifiedBy,
-                    ModifiedTime = q.ModifiedTime,
-                    Version = q.Version
-                })
-                .ToList(),
-            QuestionsCount = quiz.Questions.Count,
-            HistoriesCount = quiz.Histories.Count
-        };
+        // private Expression<Func<QuizModel, QuizModel>> MapQuizWithQuestions = quiz => new QuizModel
+        // {
+        //     QuizId = quiz.QuizId,
+        //     Category = quiz.Category,
+        //     CategoryId = quiz.CategoryId,
+        //     CreatedBy = quiz.CreatedBy,
+        //     CreatedTime = quiz.CreatedTime,
+        //     DeletedBy = quiz.DeletedBy,
+        //     DeletedTime = quiz.DeletedTime,
+        //     Description = quiz.Description,
+        //     ImageUrl = quiz.ImageUrl,
+        //     ModifiedBy = quiz.ModifiedBy,
+        //     ModifiedTime = quiz.ModifiedTime,
+        //     RecordStatus = quiz.RecordStatus,
+        //     Time = quiz.Time,
+        //     Title = quiz.Title,
+        //     User = quiz.User,
+        //     UserId = quiz.UserId,
+        //     Version = quiz.Version,
+        //     Questions = quiz.Questions
+        //         .Where(q => q.RecordStatus == RecordStatusConstant.Active)
+        //         .OrderBy(x => x.QuestionOrder)
+        //         .Select(q => new QuestionModel
+        //         {
+        //             QuestionId = q.QuestionId,
+        //             QuizId = q.QuizId,
+        //             Text = q.Text,
+        //             RecordStatus = q.RecordStatus,
+        //             Answers = q.Answers
+        //                 .Where(a => a.RecordStatus == RecordStatusConstant.Active)
+        //                 .OrderBy(a => a.AnswerOrder)
+        //                 .Select(a => a)
+        //                 .ToList(),
+        //             CreatedBy = q.CreatedBy,
+        //             QuestionOrder = q.QuestionOrder,
+        //             CreatedTime = q.CreatedTime,
+        //             DeletedBy = q.DeletedBy,
+        //             DeletedTime = q.DeletedTime,
+        //             Description = q.Description,
+        //             ImageUrl = q.ImageUrl,
+        //             ModifiedBy = q.ModifiedBy,
+        //             ModifiedTime = q.ModifiedTime,
+        //             Version = q.Version
+        //         })
+        //         .ToList(),
+        //     QuestionsCount = quiz.Questions.Count,
+        //     HistoriesCount = quiz.Histories.Count
+        // };
 
-        private Expression<Func<QuizModel, QuizModel>> MapQuizWithQuestionsCount = quiz => new QuizModel
+        private Expression<Func<QuizModel, QuizModel>> MapQuiz = quiz => new QuizModel
         {
             QuizId = quiz.QuizId,
             Category = quiz.Category,
