@@ -9,9 +9,6 @@ namespace QuizApi.DTOs.CheckQuiz
         public uint QuizVersion { get; set; }
         public List<CheckQuestionDto> Questions { get; set; }
         public int QuestionCount { get; set; }        
-        public int Duration { get; set; }        
-        public int TrueAnswers { get; set; }        
-        public int WrongAnswers { get; set; }        
-        public int Score { get; set; }        
+        public int Duration { get; set; }       
     }
 }

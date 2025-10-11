@@ -20,7 +20,7 @@ namespace QuizApi.DTOs.Quiz
         public string? ImageUrl { get; set; }
         public int? Time { get; set; }
         public List<QuestionDto> Questions { get; set; }
-        public int QuestionsCount { get; set; }
+        public int QuestionCount { get; set; }
         public int HistoriesCount { get; set; }
     }
 

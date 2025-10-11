@@ -16,7 +16,7 @@ namespace QuizApi.Models.QuizHistory
         public int QuestionOrder { get; set; }
         public string? ImageUrl { get; set; }
         public List<AnswerHistoryModel> Answers { get; set; }
-        public int SelectedAnswerOrder { get; set; }
+        public int? SelectedAnswerOrder { get; set; }
         public bool IsAnswerTrue { get; set; }
     }
 }

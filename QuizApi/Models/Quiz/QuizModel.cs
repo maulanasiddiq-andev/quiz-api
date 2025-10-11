@@ -21,7 +21,7 @@ namespace QuizApi.Models.Quiz
         public string Title { get; set; } = string.Empty;
         public string? ImageUrl { get; set; }
         public int Time { get; set; }
-        public int QuestionsCount { get; set; }
+        public int QuestionCount { get; set; }
         public virtual ICollection<QuestionModel> Questions { get; set; }
         public int HistoriesCount { get; set; }
         public virtual ICollection<QuizHistoryModel> Histories { get; set; }

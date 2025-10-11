@@ -13,5 +13,6 @@ namespace QuizApi.DTOs.TakeQuiz
         public int? Time { get; set; }
         public List<TakeQuestionDto> Questions { get; set; }
         public int QuestionsCount { get; set; }
+        public uint Version { get; set; }
     }
 }
