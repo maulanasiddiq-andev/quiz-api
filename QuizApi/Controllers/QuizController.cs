@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using QuizApi.Attributes;
 using QuizApi.Constants;
 using QuizApi.DTOs.Quiz;
-using QuizApi.DTOs.QuizExam;
+using QuizApi.DTOs.CheckQuiz;
 using QuizApi.DTOs.Request;
 using QuizApi.Exceptions;
 using QuizApi.Extensions;

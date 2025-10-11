@@ -1,13 +1,13 @@
-namespace QuizApi.DTOs.QuizExam
+namespace QuizApi.DTOs.CheckQuiz
 {
-    public class QuizExamDto
+    public class CheckQuizDto
     {
-        public QuizExamDto()
+        public CheckQuizDto()
         {
-            Questions = new List<QuestionExamDto>();
+            Questions = new List<CheckQuestionDto>();
         }
         public uint QuizVersion { get; set; }
-        public List<QuestionExamDto> Questions { get; set; }
+        public List<CheckQuestionDto> Questions { get; set; }
         public int QuestionCount { get; set; }        
         public int Duration { get; set; }        
         public int TrueAnswers { get; set; }        

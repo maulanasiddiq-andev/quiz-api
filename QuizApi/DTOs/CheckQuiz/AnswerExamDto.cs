@@ -1,6 +1,6 @@
-namespace QuizApi.DTOs.QuizExam
+namespace QuizApi.DTOs.CheckQuiz
 {
-    public class AnswerExamDto
+    public class CheckAnswerDto
     {
         public int AnswerOrder { get; set; }
         public string? Text { get; set; }

@@ -1,5 +1,5 @@
 using AutoMapper;
-using QuizApi.DTOs.QuizExam;
+using QuizApi.DTOs.CheckQuiz;
 using QuizApi.DTOs.QuizHistory;
 using QuizApi.Models.QuizHistory;
 
@@ -9,9 +9,9 @@ namespace QuizApi.Mappings
     {
         public QuizHistoryMappingProfile()
         {
-            CreateMap<QuizExamDto, QuizHistoryModel>();
-            CreateMap<QuestionExamDto, QuestionHistoryModel>();
-            CreateMap<AnswerExamDto, AnswerHistoryModel>();
+            CreateMap<CheckQuizDto, QuizHistoryModel>();
+            CreateMap<CheckQuestionDto, QuestionHistoryModel>();
+            CreateMap<CheckAnswerDto, AnswerHistoryModel>();
 
             CreateMap<QuizHistoryModel, QuizHistoryDto>();
             CreateMap<QuestionHistoryModel, QuestionHistoryDto>();

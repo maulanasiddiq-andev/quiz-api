@@ -3,7 +3,7 @@ using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using QuizApi.Constants;
 using QuizApi.DTOs.Quiz;
-using QuizApi.DTOs.QuizExam;
+using QuizApi.DTOs.CheckQuiz;
 using QuizApi.DTOs.QuizHistory;
 using QuizApi.DTOs.Request;
 using QuizApi.DTOs.TakeQuiz;
@@ -254,7 +254,7 @@ namespace QuizApi.Repositories
             HistoriesCount = quiz.Histories.Count
         };
 
-        public async Task TakeQuizAsync(QuizExamDto quizExamDto, string quizId)
+        public async Task TakeQuizAsync(CheckQuizDto quizExamDto, string quizId)
         {
             QuizHistoryModel quizHistory = mapper.Map<QuizHistoryModel>(quizExamDto);
 
