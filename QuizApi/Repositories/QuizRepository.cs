@@ -250,17 +250,28 @@ namespace QuizApi.Repositories
             User = quiz.User,
             UserId = quiz.UserId,
             Version = quiz.Version,
-            QuestionsCount = quiz.Questions.Count,
+            QuestionCount = quiz.Questions.Count,
             HistoriesCount = quiz.Histories.Count
         };
 
-        public async Task TakeQuizAsync(CheckQuizDto quizExamDto, string quizId)
+        public async Task<QuizHistoryModel> CheckQuizAsync(CheckQuizDto checkQuizDto, string quizId)
         {
-            QuizHistoryModel quizHistory = mapper.Map<QuizHistoryModel>(quizExamDto);
+            QuizModel? quiz = await dBContext.Quiz
+                .Where(x => x.QuizId == quizId && x.RecordStatus == RecordStatusConstant.Active)
+                .Include(x => x.Questions).ThenInclude(y => y.Answers)
+                .FirstOrDefaultAsync();
+
+            if (quiz == null)
+            {
+                throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            // map quiz model to quiz history model, then check the answers with check quiz dto
+            QuizHistoryModel quizHistory = mapper.Map<QuizHistoryModel>(quiz);
 
             quizHistory.QuizHistoryId = Guid.NewGuid().ToString("N");
             quizHistory.QuizId = quizId;
-            quizHistory.QuizVersion = quizExamDto.QuizVersion;
+            quizHistory.QuizVersion = checkQuizDto.QuizVersion;
             quizHistory.UserId = userId;
             quizHistory.CreatedBy = userId;
             quizHistory.CreatedTime = DateTime.UtcNow;
@@ -269,20 +280,55 @@ namespace QuizApi.Repositories
             quizHistory.ModifiedTime = DateTime.UtcNow;
             quizHistory.RecordStatus = RecordStatusConstant.Active;
 
-            foreach (var questionHistory in quizHistory.Questions)
+            // check every question
+            foreach (var question in quizHistory.Questions)
             {
-                questionHistory.QuestionHistoryId = Guid.NewGuid().ToString("N");
-                questionHistory.QuizHistoryId = quizHistory.QuizHistoryId;
+                question.QuestionHistoryId = Guid.NewGuid().ToString("N");
+                question.QuizHistoryId = quizHistory.QuizHistoryId;
 
-                foreach (var answerHistory in questionHistory.Answers)
+                // answered question
+                CheckQuestionDto? checkQuestion = checkQuizDto.Questions.Where(x => x.QuestionOrder == question.QuestionOrder).FirstOrDefault();
+
+                if (checkQuestion == null)
                 {
-                    answerHistory.AnswerHistoryId = Guid.NewGuid().ToString("N");
-                    answerHistory.QuestionHistoryId = questionHistory.QuestionHistoryId;
+                    question.SelectedAnswerOrder = null;
+                    question.IsAnswerTrue = false;
                 }
+                else
+                {
+                    AnswerHistoryModel? selectedAnswer = question.Answers.Where(x => x.AnswerOrder == checkQuestion.SelectedAnswerOrder).FirstOrDefault();
+
+                    if (selectedAnswer == null)
+                    {
+                        throw new KnownException(ErrorMessageConstant.DataNotFound);
+                    }
+
+                    question.SelectedAnswerOrder = checkQuestion.SelectedAnswerOrder;
+                    question.IsAnswerTrue = selectedAnswer.IsTrueAnswer;
+                }
+
+                // assign id for answers
+                foreach (var answer in question.Answers)
+                {
+                    answer.AnswerHistoryId = Guid.NewGuid().ToString("N");
+                    answer.QuestionHistoryId = question.QuestionHistoryId;
+                }
+
+                question.Answers = question.Answers.OrderBy(x => x.AnswerOrder).ToList();
             }
+
+            quizHistory.Questions = quizHistory.Questions.OrderBy(x => x.QuestionOrder).ToList();
+            quizHistory.QuizVersion = checkQuizDto.QuizVersion;
+            quizHistory.Duration = checkQuizDto.Duration;
+            quizHistory.QuestionCount = checkQuizDto.QuestionCount;
+            quizHistory.TrueAnswers = quizHistory.Questions.Where(x => x.IsAnswerTrue).Count();
+            quizHistory.WrongAnswers = quizHistory.QuestionCount - quizHistory.TrueAnswers;
+            quizHistory.Score = (int)Math.Round((double)quizHistory.TrueAnswers / quizHistory.QuestionCount * 100);
 
             await dBContext.AddAsync(quizHistory);
             await dBContext.SaveChangesAsync();
+
+            return quizHistory;
         }
 
         public async Task<SearchResponse> GetHistoriesByQuizIdAsync(SearchRequestDto searchRequest, string quizId)

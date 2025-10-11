@@ -202,29 +202,29 @@ namespace QuizApi.Controllers
             }
         }
 
-        // [HttpPost]
-        // [Route("{id}/take-quiz")]
-        // public async Task<BaseResponse> TakeQuizAsync([FromBody] QuizExamDto quizExamDto, [FromRoute] string id)
-        // {
-        //     try
-        //     {
-        //         await quizRepository.TakeQuizAsync(quizExamDto, id);
+        [HttpPost]
+        [Route("{id}/check-quiz")]
+        public async Task<BaseResponse> TakeQuizAsync([FromBody] CheckQuizDto checkQuizDto, [FromRoute] string id)
+        {
+            try
+            {
+                var result = await quizRepository.CheckQuizAsync(checkQuizDto, id);
 
-        //         return new BaseResponse(true, "Hasil kuis berhasil disimpan", null);
-        //     }
-        //     catch (KnownException ex)
-        //     {
-        //         activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                return new BaseResponse(true, "Hasil kuis berhasil disimpan", result);
+            }
+            catch (KnownException ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
-        //         return new BaseResponse(false, ex.Message, null);
-        //     }
-        //     catch (Exception ex)
-        //     {
-        //         activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                return new BaseResponse(false, ex.Message, null);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
-        //         return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
-        //     }
-        // }
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
 
         [HttpGet]
         [Route("{id}/history")]
