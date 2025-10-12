@@ -152,7 +152,7 @@ namespace QuizApi.Repositories
                 question.Answers = question.Answers.OrderBy(x => x.AnswerOrder).ToList();
             }
 
-            quizDto.QuestionsCount = quizDto.Questions.Count();
+            quizDto.QuestionCount = quizDto.Questions.Count();
 
             return quizDto;
         }
