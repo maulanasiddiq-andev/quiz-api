@@ -36,11 +36,18 @@ namespace QuizApi.Repositories
             }
         }
 
-        public async Task<SearchResponse> SearchDatasAsync(SearchRequestDto searchRequest)
+        public async Task<SearchResponse> SearchDatasAsync(QuizFilterDto searchRequest)
         {
             IQueryable<QuizModel> listQuizzesQuery = dBContext.Quiz
                 .Where(x => x.RecordStatus == RecordStatusConstant.Active)
                 .Select(MapQuiz);
+
+            #region 
+            if (!string.IsNullOrEmpty(searchRequest.CategoryId))
+            {
+                listQuizzesQuery = listQuizzesQuery.Where(x => x.CategoryId == searchRequest.CategoryId).AsQueryable();
+            }
+            #endregion
 
             #region Ordering
             string orderBy = searchRequest.OrderBy;

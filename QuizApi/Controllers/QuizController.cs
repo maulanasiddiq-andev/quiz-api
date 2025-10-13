@@ -34,7 +34,7 @@ namespace QuizApi.Controllers
         }
 
         [HttpGet]
-        public async Task<BaseResponse> SearchQuizzesAsync([FromQuery] SearchRequestDto searchRequest)
+        public async Task<BaseResponse> SearchQuizzesAsync([FromQuery] QuizFilterDto searchRequest)
         {
             try
             {
