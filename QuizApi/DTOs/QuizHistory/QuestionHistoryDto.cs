@@ -12,7 +12,7 @@ namespace QuizApi.DTOs.QuizHistory
         public int QuestionOrder { get; set; }
         public string? ImageUrl { get; set; }
         public List<AnswerHistoryDto> Answers { get; set; }
-        public int SelectedAnswerOrder { get; set; }
+        public int? SelectedAnswerOrder { get; set; }
         public bool IsAnswerTrue { get; set; }
     }
 }

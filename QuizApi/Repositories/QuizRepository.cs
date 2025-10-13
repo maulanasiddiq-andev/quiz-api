@@ -287,31 +287,36 @@ namespace QuizApi.Repositories
             quizHistory.ModifiedTime = DateTime.UtcNow;
             quizHistory.RecordStatus = RecordStatusConstant.Active;
 
-            // check every question
+            // check every question from the quiz
             foreach (var question in quizHistory.Questions)
             {
                 question.QuestionHistoryId = Guid.NewGuid().ToString("N");
                 question.QuizHistoryId = quizHistory.QuizHistoryId;
 
-                // answered question
+                // question about to be checked
                 CheckQuestionDto? checkQuestion = checkQuizDto.Questions.Where(x => x.QuestionOrder == question.QuestionOrder).FirstOrDefault();
 
+                // if the checked question is not found, the quiz is not valid
                 if (checkQuestion == null)
                 {
-                    question.SelectedAnswerOrder = null;
-                    question.IsAnswerTrue = false;
+                    throw new KnownException(ErrorMessageConstant.DataNotFound);
                 }
                 else
                 {
                     AnswerHistoryModel? selectedAnswer = question.Answers.Where(x => x.AnswerOrder == checkQuestion.SelectedAnswerOrder).FirstOrDefault();
 
+                    // if user didn't answer the question
+                    // automatically assign it as false
                     if (selectedAnswer == null)
                     {
-                        throw new KnownException(ErrorMessageConstant.DataNotFound);
+                        question.SelectedAnswerOrder = null;
+                        question.IsAnswerTrue = false;
                     }
-
-                    question.SelectedAnswerOrder = checkQuestion.SelectedAnswerOrder;
-                    question.IsAnswerTrue = selectedAnswer.IsTrueAnswer;
+                    else
+                    {
+                        question.SelectedAnswerOrder = checkQuestion.SelectedAnswerOrder;
+                        question.IsAnswerTrue = selectedAnswer.IsTrueAnswer;
+                    }
                 }
 
                 // assign id for answers
