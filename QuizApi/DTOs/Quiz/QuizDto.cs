@@ -1,6 +1,5 @@
 using FluentValidation;
 using QuizApi.DTOs.Identity;
-using QuizApi.Models.Quiz;
 
 namespace QuizApi.DTOs.Quiz
 {
@@ -13,7 +12,7 @@ namespace QuizApi.DTOs.Quiz
 
         public string QuizId { get; set; } = string.Empty;
         public string? UserId { get; set; }
-        public UserDto? User { get; set; }
+        public SimpleUserDto? User { get; set; }
         public string? CategoryId { get; set; }
         public CategoryDto? Category { get; set; }
         public string Title { get; set; } = string.Empty;

@@ -11,6 +11,7 @@ namespace QuizApi.Mappings
         {
             CreateMap<RegisterDto, UserModel>();
             CreateMap<UserModel, UserDto>();
+            CreateMap<UserModel, SimpleUserDto>();
         }
     }
 }
