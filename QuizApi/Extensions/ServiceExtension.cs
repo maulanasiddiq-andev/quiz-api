@@ -8,6 +8,8 @@ namespace QuizApi.Extensions
         public static void RegisterRepositories(this IServiceCollection collection)
         {
             collection.AddScoped<AuthRepository>();
+            collection.AddScoped<UserRepository>();
+            
             collection.AddScoped<CategoryRepository>();
             collection.AddScoped<HistoryRepository>();
 

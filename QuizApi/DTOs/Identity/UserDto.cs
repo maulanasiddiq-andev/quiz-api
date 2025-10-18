@@ -11,5 +11,6 @@ namespace QuizApi.DTOs.Identity
         public string? CoverImage { get; set; }
         public DateTime? LastLoginTime { get; set; }
         public int FailedLoginAttempts { get; set; }
+        public string? RoleId { get; set; }
     }
 }
