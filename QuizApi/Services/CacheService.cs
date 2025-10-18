@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Caching.Memory;
+using QuizApi.Constants;
 using QuizApi.Extensions;
 
 namespace QuizApi.Services
@@ -6,13 +7,16 @@ namespace QuizApi.Services
     public class CacheService
     {
         private readonly IMemoryCache _memoryCache;
+        private readonly ActivityLogService activityLogService;
         private readonly string userId = "";
         public CacheService(
             IMemoryCache memoryCache,
-            IHttpContextAccessor httpContextAccessor
+            IHttpContextAccessor httpContextAccessor,
+            ActivityLogService activityLogService
         )
         {
             _memoryCache = memoryCache;
+            this.activityLogService = activityLogService;
 
             if (httpContextAccessor != null)
             {
@@ -29,9 +33,9 @@ namespace QuizApi.Services
                     return value;
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // activityLogService.SaveErrorLog(ex, "GetData", userId, tenantId, key);
+                activityLogService.SaveErrorLog(ex, "GetData", userId, key);
             }
 
             return default;
@@ -49,9 +53,9 @@ namespace QuizApi.Services
                 _memoryCache.Set(key, value, cacheEntryOptions);
                 return true;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // activityLogService.SaveErrorLog(ex, "SetData", userId, tenantId, key);
+                activityLogService.SaveErrorLog(ex, "SetData", userId, key);
             }
             return false;
         }
@@ -62,34 +66,35 @@ namespace QuizApi.Services
             {
                 _memoryCache.Remove(key);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // activityLogService.SaveErrorLog(ex, "RemoveData", userId, tenantId, key);
+                activityLogService.SaveErrorLog(ex, "RemoveData", userId, key);
             }
         }
 
-        // public void RemoveUserRelatedCache(string userId)
-        // {
-        //     try
-        //     {
-        //         RemoveData(MemoryCacheConstant.UserTokenKey + userId);
-        //         RemoveData(MemoryCacheConstant.RoleModulKey + userId);
-        //         RemoveData(MemoryCacheConstant.UserKey + userId);
-        //         RemoveData(MemoryCacheConstant.UserRoleKey + userId);
-        //     }
-        //     catch { }
-        // }
+        public void RemoveUserRelatedCache(string userId)
+        {
+            try
+            {
+                RemoveData(MemoryCacheConstant.UserTokenKey + userId);
+                RemoveData(MemoryCacheConstant.RoleModuleKey + userId);
+                RemoveData(MemoryCacheConstant.UserKey + userId);
+            }
+            catch { }
+        }
         
-        // public void RemoveUserRelatedCache(List<string> usersId)
-        // {
-        //     try
-        //     {
-        //         foreach (var userId in usersId)
-        //         {
-        //             RemoveUserRelatedCache(userId);
-        //         }
-        //     }
-        //     catch { }
-        // }
+        public void RemoveUserRelatedCache(List<string> usersId)
+        {
+            try
+            {
+                foreach (var userId in usersId)
+                {
+                    RemoveData(MemoryCacheConstant.UserTokenKey + userId);
+                    RemoveData(MemoryCacheConstant.RoleModuleKey + userId);
+                    RemoveData(MemoryCacheConstant.UserKey + userId);
+                }
+            }
+            catch { }
+        }
     }
 }

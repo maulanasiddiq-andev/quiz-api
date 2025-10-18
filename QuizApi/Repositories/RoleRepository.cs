@@ -9,6 +9,7 @@ using QuizApi.Helpers;
 using QuizApi.Models;
 using QuizApi.Models.Identity;
 using QuizApi.Responses;
+using QuizApi.Services;
 
 namespace QuizApi.Repositories
 {
@@ -17,14 +18,17 @@ namespace QuizApi.Repositories
         private readonly IMapper mapper;
         private readonly QuizAppDBContext dBContext;
         private readonly string userId = "";
+        private readonly CacheService cacheService;
         public RoleRepository(
             IMapper mapper,
             QuizAppDBContext dBContext,
-            IHttpContextAccessor httpContextAccessor
+            IHttpContextAccessor httpContextAccessor,
+            CacheService cacheService
         )
         {
             this.mapper = mapper;
             this.dBContext = dBContext;
+            this.cacheService = cacheService;
 
             if (httpContextAccessor != null)
             {
@@ -179,9 +183,7 @@ namespace QuizApi.Repositories
                 // delete
                 if (updatedRoleModule != null && module.IsSelected == false)
                 {
-                    updatedRoleModule.RecordStatus = RecordStatusConstant.Deleted;
-
-                    dBContext.Update(updatedRoleModule);
+                    dBContext.Remove(updatedRoleModule);
                 }
 
                 // if the module is previously unselected and no selected
@@ -203,6 +205,13 @@ namespace QuizApi.Repositories
                     await dBContext.AddAsync(newRoleModule);
                 }
             }
+
+            List<string> userIds = await dBContext.User
+                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.RoleId == roleId)
+                .Select(x => x.UserId)
+                .ToListAsync();
+
+            cacheService.RemoveUserRelatedCache(userIds);
 
             await dBContext.SaveChangesAsync();
         }
