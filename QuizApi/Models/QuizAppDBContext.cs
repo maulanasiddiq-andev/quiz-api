@@ -13,6 +13,8 @@ namespace QuizApi.Models
         public DbSet<OtpModel> Otp { get; set; }
         public DbSet<UserTokenModel> UserToken { get; set; }
         public DbSet<UserModel> User { get; set; }
+        public DbSet<RoleModel> Role { get; set; }
+        public DbSet<RoleModuleModel> RoleModule { get; set; }
         public DbSet<CategoryModel> Category { get; set; }
         public DbSet<QuizModel> Quiz { get; set; }
         public DbSet<QuestionModel> Question { get; set; }

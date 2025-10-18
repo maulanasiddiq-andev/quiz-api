@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using QuizApi.Models;
@@ -11,9 +12,11 @@ using QuizApi.Models;
 namespace QuizApi.Migrations
 {
     [DbContext(typeof(QuizAppDBContext))]
-    partial class QuizAppDBContextModelSnapshot : ModelSnapshot
+    [Migration("20251018041003_AddBaseModelForRoleModule")]
+    partial class AddBaseModelForRoleModule
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -183,9 +186,6 @@ namespace QuizApi.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<bool>("IsMain")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("ModifiedBy")
                         .IsRequired()
                         .HasColumnType("text");
@@ -324,9 +324,6 @@ namespace QuizApi.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("RoleId")
-                        .HasColumnType("text");
-
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasColumnType("text");
@@ -338,8 +335,6 @@ namespace QuizApi.Migrations
                         .HasColumnName("xmin");
 
                     b.HasKey("UserId");
-
-                    b.HasIndex("RoleId");
 
                     b.ToTable("User");
                 });
@@ -726,15 +721,6 @@ namespace QuizApi.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("QuizHistory");
-                });
-
-            modelBuilder.Entity("QuizApi.Models.Identity.UserModel", b =>
-                {
-                    b.HasOne("QuizApi.Models.Identity.RoleModel", "Role")
-                        .WithMany()
-                        .HasForeignKey("RoleId");
-
-                    b.Navigation("Role");
                 });
 
             modelBuilder.Entity("QuizApi.Models.Quiz.AnswerModel", b =>
