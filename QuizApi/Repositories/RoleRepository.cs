@@ -161,6 +161,37 @@ namespace QuizApi.Repositories
             await dBContext.SaveChangesAsync();
         }
 
+        // PUT update role by id
+        public async Task UpdateDataAsync(string id, RoleDto roleDto)
+        {
+            RoleModel? role = await GetActiveRoleByIdAsync(id);
+
+            if (role is null)
+            {
+                throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            role.Name = roleDto.Name;
+            role.Description = roleDto.Description ?? "";
+            role.IsMain = roleDto.IsMain;
+
+            // if the updated role is changed to main, change other roles to IsMain = false
+            if (role.IsMain)
+            {
+                List<RoleModel> roles = await dBContext.Role.Where(x => x.RoleId != id).ToListAsync();
+
+                foreach (var item in roles)
+                {
+                    item.IsMain = false;
+                }
+
+                dBContext.UpdateRange(roles);
+            }
+
+            dBContext.Update(role);
+            await dBContext.SaveChangesAsync();
+        }
+
         // PUT update role by id (update-modules)
         public async Task UpdateRoleModulesByIdAsync(string roleId, RoleWithModuleDto roleWithModuleDto)
         {

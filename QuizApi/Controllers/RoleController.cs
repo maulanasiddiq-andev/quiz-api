@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using QuizApi.Attributes;
 using QuizApi.Constants;
 using QuizApi.DTOs.Identity;
@@ -127,6 +128,47 @@ namespace QuizApi.Controllers
                 activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ex.Message, null);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
+        [HttpPut]
+        [Route("{id}")]
+        public async Task<BaseResponse> UpdateRoleByIdAsync([FromRoute] string id, [FromBody] RoleDto roleDto)
+        {
+            try
+            {
+                if (roleDto is null || id is null)
+                {
+                    throw new KnownException(ErrorMessageConstant.MethodParameterNull);
+                }
+
+                var validator = new RoleValidator();
+                var results = validator.Validate(roleDto);
+                if (!results.IsValid)
+                {
+                    var messages = results.Errors.Select(x => x.ErrorMessage).ToList();
+                    return new BaseResponse(false, messages);
+                }
+
+                await roleRepository.UpdateDataAsync(id, roleDto);
+
+                return new BaseResponse(true, "Role berhasil diupdate", null);
+            }
+            catch (KnownException ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ex.Message, null);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return new BaseResponse(false, ErrorMessageConstant.ItemAlreadyChanged, null);
             }
             catch (Exception ex)
             {
