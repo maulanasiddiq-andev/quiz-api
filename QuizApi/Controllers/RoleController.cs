@@ -28,15 +28,6 @@ namespace QuizApi.Controllers
         }
 
         [HttpGet]
-        [Route("get-modules")]
-        public async Task<BaseResponse> GetAllModules()
-        {
-            var modules = roleRepository.GetAllModules();
-
-            return new BaseResponse(true, "", modules);
-        }
-
-        [HttpGet]
         public async Task<BaseResponse> SearchRolesAsync([FromQuery] SearchRequestDto searchRequest)
         {
             try

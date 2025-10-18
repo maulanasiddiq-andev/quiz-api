@@ -36,11 +36,6 @@ namespace QuizApi.Repositories
             }
         }
 
-        public List<string> GetAllModules()
-        {
-            return ModuleMappingHelper.GetAllModules();
-        }
-
         // GET search
         public async Task<SearchResponse> SearchDatasAsync(SearchRequestDto searchRequest)
         {
