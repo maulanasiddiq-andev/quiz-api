@@ -25,6 +25,7 @@ namespace QuizApi.Repositories
         private readonly JWTSetting jwtSetting;
         private readonly GoogleSetting googleSetting;
         private readonly IMapper mapper;
+        private readonly RoleRepository roleRepository;
         private readonly string userId = "";
         public AuthRepository(
             QuizAppDBContext dBContext,
@@ -32,11 +33,13 @@ namespace QuizApi.Repositories
             IOptions<JWTSetting> jwtOptions,
             IOptions<GoogleSetting> googleOptions,
             IHttpContextAccessor httpContextAccessor,
-            IMapper mapper
+            IMapper mapper,
+            RoleRepository roleRepository
         )
         {
             this.dBContext = dBContext;
             this.mapper = mapper;
+            this.roleRepository = roleRepository;
             emailSetting = emailOptions.Value;
             jwtSetting = jwtOptions.Value;
             googleSetting = googleOptions.Value;
@@ -173,8 +176,19 @@ namespace QuizApi.Repositories
 
         public async Task<TokenDto> GenerateAndSaveLoginToken(UserModel user, string userAgent)
         {
+            RoleDto? role = null;
+            List<string> roleModuleNames = new();
+
+            if (user.RoleId != null)
+            {
+                role = await roleRepository.GetDataByIdAsync(user.RoleId);
+                var roleModules = await roleRepository.GetRoleModulesByRoleId(user.RoleId);
+
+                roleModuleNames = roleModules.Select(x => x.RoleModuleName).Order().ToList();
+            }
+            
             DateTime expiredTime = DateTime.UtcNow.AddHours(jwtSetting.TokenExpiredTimeInHour);
-            var jwtToken = AuthorizationHelper.GenerateJWTToken(jwtSetting, expiredTime, user);
+            var jwtToken = AuthorizationHelper.GenerateJWTToken(jwtSetting, expiredTime, user, role?.Name, roleModuleNames);
 
             var userToken = new UserTokenModel
             {

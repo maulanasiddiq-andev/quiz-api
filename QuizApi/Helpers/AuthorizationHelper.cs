@@ -23,7 +23,13 @@ namespace QuizApi.Helpers
             return result;
         }
 
-        public static string GenerateJWTToken(JWTSetting jwtSettings, DateTime tokenExpiredTime, UserModel user)
+        public static string GenerateJWTToken(
+            JWTSetting jwtSettings,
+            DateTime tokenExpiredTime,
+            UserModel user,
+            string? roleName,
+            List<string> roleModules
+        )
         {
             var secureKey = Encoding.UTF8.GetBytes(jwtSettings.Key);
             var securityKey = new SymmetricSecurityKey(secureKey);
@@ -47,10 +53,32 @@ namespace QuizApi.Helpers
                 SigningCredentials = credentials
             };
 
+            tokenDescriptor.Subject.AddClaim(BuildUserRoleClaims(roleName));
+            tokenDescriptor.Subject.AddClaims(BuildUserRoleModulClaims(roleModules));
+
             var token = jwtTokenHandler.CreateToken(tokenDescriptor);
             var jwtToken = jwtTokenHandler.WriteToken(token);
 
             return jwtToken;
+        }
+
+        public static Claim BuildUserRoleClaims(string? role)
+        {
+            Claim claims = new Claim(ClaimTypes.Role, role ?? "");
+
+            return claims;
+        }
+
+        public static List<Claim> BuildUserRoleModulClaims(List<string> roleModulNames)
+        {
+            List<Claim> claims = new();
+
+            foreach (string name in roleModulNames)
+            {
+                claims.Add(new Claim("modules", name ?? ""));
+            }
+
+            return claims;
         }
     }
 }

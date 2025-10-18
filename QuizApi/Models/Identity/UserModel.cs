@@ -14,6 +14,8 @@ namespace QuizApi.Models.Identity
         public string Email { get; set; } = string.Empty;
         [Required]
         public string HashedPassword { get; set; } = string.Empty;
+        public string? RoleId { get; set; }
+        public RoleModel? Role { get; set; }
         public DateTime? EmailVerifiedTime { get; set; } = null;
         public string? ProfileImage { get; set; }
         public string? CoverImage { get; set; }
