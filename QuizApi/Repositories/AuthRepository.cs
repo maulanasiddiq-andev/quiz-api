@@ -60,6 +60,14 @@ namespace QuizApi.Repositories
                 throw new KnownException($"User dengan email {user.Email} atau username {user.Username} sudah ada");
             }
 
+            // get the main role for being assigned to newly added user for default
+            RoleModel? role = await dBContext.Role.Where(x => x.IsMain == true).FirstOrDefaultAsync();
+
+            if (role != null)
+            {
+                user.RoleId = role.RoleId;
+            }
+
             user.UserId = Guid.NewGuid().ToString("N");
             user.HashedPassword = passwordHasherHelper.Hash(password);
             user.CreatedTime = DateTime.UtcNow;
@@ -267,6 +275,14 @@ namespace QuizApi.Repositories
                 RecordStatus = RecordStatusConstant.Active,
                 ProfileImage = payload.Picture
             };
+
+             // get the main role for being assigned to newly added user for default
+            RoleModel? role = await dBContext.Role.Where(x => x.IsMain == true).FirstOrDefaultAsync();
+
+            if (role != null)
+            {
+                newUser.RoleId = role.RoleId;
+            }
 
             await dBContext.AddAsync(newUser);
             await dBContext.SaveChangesAsync();
