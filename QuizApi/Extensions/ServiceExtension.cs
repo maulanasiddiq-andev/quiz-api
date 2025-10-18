@@ -13,6 +13,8 @@ namespace QuizApi.Extensions
 
             collection.AddScoped<QuizRepository>();
 
+            collection.AddScoped<RoleRepository>();
+
             collection.AddScoped<ActivityLogService>();
             collection.AddScoped<CacheService>();
         }
