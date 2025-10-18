@@ -176,6 +176,27 @@ namespace QuizApi.Controllers
             }
         }
 
+        [HttpPost]
+        [Route("login-with-google")]
+        public async Task<BaseResponse> LoginWithGoogleAsync([FromBody] LoginWithGoogleDto loginWithGoogleDto)
+        {
+            try
+            {
+                var user = await _authRepository.LoginWithGoogleAsync(loginWithGoogleDto);
+
+                var userAgent = string.IsNullOrEmpty(Request.Headers["User-Agent"]) ? "" : Request.Headers["User-Agent"].ToString();
+
+                TokenDto tokenDto = await _authRepository.GenerateAndSaveLoginToken(user, userAgent);
+                return new BaseResponse(true, "", tokenDto);
+            }
+            catch (Exception ex)
+            {
+                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
         [HttpGet]
         [Route("check-auth")]
         [Authorize]

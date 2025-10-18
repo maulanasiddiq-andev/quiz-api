@@ -1,4 +1,5 @@
 using AutoMapper;
+using Google.Apis.Auth;
 using MailKit.Net.Smtp;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -22,12 +23,14 @@ namespace QuizApi.Repositories
         private readonly PasswordHasherHelper passwordHasherHelper;
         private readonly EmailSetting emailSetting;
         private readonly JWTSetting jwtSetting;
+        private readonly GoogleSetting googleSetting;
         private readonly IMapper mapper;
         private readonly string userId = "";
         public AuthRepository(
             QuizAppDBContext dBContext,
             IOptions<EmailSetting> emailOptions,
             IOptions<JWTSetting> jwtOptions,
+            IOptions<GoogleSetting> googleOptions,
             IHttpContextAccessor httpContextAccessor,
             IMapper mapper
         )
@@ -36,6 +39,7 @@ namespace QuizApi.Repositories
             this.mapper = mapper;
             emailSetting = emailOptions.Value;
             jwtSetting = jwtOptions.Value;
+            googleSetting = googleOptions.Value;
             passwordHasherHelper = new PasswordHasherHelper();
 
             if (httpContextAccessor != null)
@@ -222,6 +226,38 @@ namespace QuizApi.Repositories
             UserDto userDto = mapper.Map<UserDto>(user);
 
             return userDto;
+        }
+
+        public async Task<UserModel> LoginWithGoogleAsync(LoginWithGoogleDto loginWithGoogleDto)
+        {
+            var payload = await GoogleJsonWebSignature.ValidateAsync(loginWithGoogleDto.IdToken, new GoogleJsonWebSignature.ValidationSettings
+            {
+                Audience = new[] { googleSetting.ServerClientId } // <-- From Google Console
+            });
+
+            var user = await FindUserByEmailAsync(payload.Email);
+
+            if (user != null)
+            {
+                return user;
+            }
+
+            var newUser = new UserModel
+            {
+                UserId = Guid.NewGuid().ToString("N"),
+                Name = payload.Name,
+                Username = payload.Email.Split("@")[0],
+                Email = payload.Email,
+                CreatedTime = DateTime.UtcNow,
+                ModifiedTime = DateTime.UtcNow,
+                RecordStatus = RecordStatusConstant.Active,
+                ProfileImage = payload.Picture
+            };
+
+            await dBContext.AddAsync(newUser);
+            await dBContext.SaveChangesAsync();
+
+            return newUser;
         }
     }
 }
