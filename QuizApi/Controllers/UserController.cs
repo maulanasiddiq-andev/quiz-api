@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using QuizApi.Attributes;
 using QuizApi.Constants;
+using QuizApi.DTOs.Identity;
 using QuizApi.DTOs.Request;
+using QuizApi.Exceptions;
 using QuizApi.Extensions;
 using QuizApi.Repositories;
 using QuizApi.Responses;
@@ -32,6 +35,99 @@ namespace QuizApi.Controllers
                 var result = await userRepository.SearchDatasAsync(searchRequest);
 
                 return new BaseResponse(true, "", result);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
+        [HttpGet("{id}")]
+        public async Task<BaseResponse> GetUserByIdAsync([FromRoute] string id)
+        {
+            try
+            {
+                if (id is null)
+                {
+                    throw new KnownException(ErrorMessageConstant.MethodParameterNull);
+                }
+
+                var user = await userRepository.GetDataByIdAsync(id);
+
+                return new BaseResponse(true, "", user);
+            }
+            catch (KnownException ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ex.Message, null);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
+        [HttpPut]
+        [Route("{id}")]
+        public async Task<BaseResponse> UpdateCategoryByIdAsync([FromRoute] string id, [FromBody] UserDto user)
+        {
+            try
+            {
+                if (user is null || id is null)
+                {
+                    throw new KnownException(ErrorMessageConstant.MethodParameterNull);
+                }
+
+                var validator = new UserValidator();
+                var results = validator.Validate(user);
+                if (!results.IsValid)
+                {
+                    var messages = results.Errors.Select(x => x.ErrorMessage).ToList();
+                    return new BaseResponse(false, messages);
+                }
+
+                await userRepository.UpdateDataAsync(id, user);
+
+                return new BaseResponse(true, "User berhasil diupdate", null);
+            }
+            catch (KnownException ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ex.Message, null);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return new BaseResponse(false, ErrorMessageConstant.ItemAlreadyChanged, null);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
+        [HttpDelete]
+        [Route("{id}")]
+        public async Task<BaseResponse> DeleteCategoryByIdAsync([FromRoute] string id)
+        {
+            try
+            {
+                await userRepository.DeleteDataAsync(id);
+
+                return new BaseResponse(true, "User berhasil dihapus", null);
+            }
+            catch (KnownException ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ex.Message, null);
             }
             catch (Exception ex)
             {

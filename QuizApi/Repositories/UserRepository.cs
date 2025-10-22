@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using QuizApi.Constants;
 using QuizApi.DTOs.Identity;
 using QuizApi.DTOs.Request;
+using QuizApi.Exceptions;
 using QuizApi.Models;
 using QuizApi.Models.Identity;
 using QuizApi.Responses;
@@ -17,7 +18,7 @@ namespace QuizApi.Repositories
         {
             this.dBContext = dBContext;
             this.mapper = mapper;
-        }   
+        }
 
         public async Task<SearchResponse> SearchDatasAsync(SearchRequestDto searchRequest)
         {
@@ -54,6 +55,59 @@ namespace QuizApi.Repositories
             response.Items = mapper.Map<List<UserDto>>(listUser);
 
             return response;
+        }
+
+        public async Task<UserDto> GetDataByIdAsync(string id)
+        {
+            UserModel? user = await GetActiveUserByIdAsync(id);
+
+            if (user is null)
+            {
+                throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            UserDto categoryDto = mapper.Map<UserDto>(user);
+
+            return categoryDto;
+        }
+
+        public async Task UpdateDataAsync(string id, UserDto userDto)
+        {
+            UserModel? user = await GetActiveUserByIdAsync(id);
+
+            if (user is null)
+            {
+                throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            user.Name = userDto.Name;
+            user.Email = userDto.Email;
+            user.Description = userDto.Description ?? "";
+
+            dBContext.Update(user);
+            await dBContext.SaveChangesAsync();
+        }
+
+        public async Task DeleteDataAsync(string id)
+        {
+            UserModel? user = await GetActiveUserByIdAsync(id);
+
+            if (user is null)
+            {
+                throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            user.RecordStatus = RecordStatusConstant.Deleted;
+
+            dBContext.Update(user);
+            await dBContext.SaveChangesAsync();
+        }
+        
+        private async Task<UserModel?> GetActiveUserByIdAsync(string id)
+        {
+            return await dBContext.User
+                .Where(x => x.UserId.Equals(id) && x.RecordStatus.ToLower().Equals(RecordStatusConstant.Active.ToLower()))
+                .FirstOrDefaultAsync();
         }
     }
 }
