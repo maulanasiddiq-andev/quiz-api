@@ -14,6 +14,7 @@ namespace QuizApi.DTOs.Identity
         public DateTime? LastLoginTime { get; set; }
         public int FailedLoginAttempts { get; set; }
         public string? RoleId { get; set; }
+        public RoleDto? Role { get; set; }
     }
 
     public class UserValidator : AbstractValidator<UserDto>

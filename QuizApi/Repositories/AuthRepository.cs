@@ -192,6 +192,10 @@ namespace QuizApi.Repositories
                 role = await roleRepository.GetDataByIdAsync(user.RoleId);
                 var roleModules = await roleRepository.GetRoleModulesByRoleId(user.RoleId);
 
+                // assign role modules for checking features access permission on UI
+                role.RoleModules = mapper.Map<List<RoleModuleDto>>(roleModules);
+
+                // take only names, for assigning them to JWT and checking permission on every request
                 roleModuleNames = roleModules.Select(x => x.RoleModuleName).Order().ToList();
             }
             
@@ -228,8 +232,11 @@ namespace QuizApi.Repositories
                 Token = jwtToken,
                 IsValidLogin = true,
                 RefreshToken = userToken.RefreshToken,
-                RefreshTokenExpiredTime = userToken.RefreshTokenExpiredTime
+                RefreshTokenExpiredTime = userToken.RefreshTokenExpiredTime,
+                User = mapper.Map<UserDto>(user)
             };
+
+            tokenDto.User.Role = role;
 
             return tokenDto;
         }
