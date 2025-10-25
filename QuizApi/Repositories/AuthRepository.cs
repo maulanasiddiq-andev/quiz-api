@@ -192,6 +192,10 @@ namespace QuizApi.Repositories
                 role = await roleRepository.GetDataByIdAsync(user.RoleId);
                 var roleModules = await roleRepository.GetRoleModulesByRoleId(user.RoleId);
 
+                // assign role modules for checking features access permission on UI
+                role.RoleModules = mapper.Map<List<RoleModuleDto>>(roleModules);
+
+                // take only names, for assigning them to JWT and checking permission on every request
                 roleModuleNames = roleModules.Select(x => x.RoleModuleName).Order().ToList();
             }
             
@@ -228,8 +232,11 @@ namespace QuizApi.Repositories
                 Token = jwtToken,
                 IsValidLogin = true,
                 RefreshToken = userToken.RefreshToken,
-                RefreshTokenExpiredTime = userToken.RefreshTokenExpiredTime
+                RefreshTokenExpiredTime = userToken.RefreshTokenExpiredTime,
+                User = mapper.Map<UserDto>(user)
             };
+
+            tokenDto.User.Role = role;
 
             return tokenDto;
         }
@@ -259,19 +266,24 @@ namespace QuizApi.Repositories
 
             var user = await FindUserByEmailAsync(payload.Email);
 
+            // if user already exists, return user immediately
             if (user != null)
             {
                 return user;
             }
 
+            // if user doesn't exist yet, create new user
             var newUser = new UserModel
             {
                 UserId = Guid.NewGuid().ToString("N"),
                 Name = payload.Name,
+                // username is taken from the part before @
                 Username = payload.Email.Split("@")[0],
                 Email = payload.Email,
                 CreatedTime = DateTime.UtcNow,
                 ModifiedTime = DateTime.UtcNow,
+                // immediately verify email
+                EmailVerifiedTime = DateTime.UtcNow,
                 RecordStatus = RecordStatusConstant.Active,
                 ProfileImage = payload.Picture
             };

@@ -1,3 +1,5 @@
+using FluentValidation;
+
 namespace QuizApi.DTOs.Identity
 {
     public class UserDto : BaseDto
@@ -12,5 +14,15 @@ namespace QuizApi.DTOs.Identity
         public DateTime? LastLoginTime { get; set; }
         public int FailedLoginAttempts { get; set; }
         public string? RoleId { get; set; }
+        public RoleDto? Role { get; set; }
+    }
+
+    public class UserValidator : AbstractValidator<UserDto>
+    {
+        public UserValidator()
+        {
+            RuleFor(x => x.Email).NotEmpty().WithMessage("Email harus diisi");
+            RuleFor(x => x.Name).NotEmpty().WithMessage("Nama harus diisi");
+        }
     }
 }

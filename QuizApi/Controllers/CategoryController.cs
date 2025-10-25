@@ -125,9 +125,9 @@ namespace QuizApi.Controllers
                     return new BaseResponse(false, messages);
                 }
 
-                await categoryRepository.UpdateDataAsync(id, category);
+                var result = await categoryRepository.UpdateDataAsync(id, category);
 
-                return new BaseResponse(true, "category berhasil diupdate", null);
+                return new BaseResponse(true, "category berhasil diupdate", result);
             }
             catch (KnownException ex)
             {

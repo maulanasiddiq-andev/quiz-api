@@ -11,6 +11,8 @@ namespace QuizApi.Mappings
             CreateMap<RoleDto, RoleModel>();
             CreateMap<RoleModel, RoleDto>();
             CreateMap<RoleModel, RoleWithModuleDto>();
+
+            CreateMap<RoleModuleModel, RoleModuleDto>();
         }
     }
 }

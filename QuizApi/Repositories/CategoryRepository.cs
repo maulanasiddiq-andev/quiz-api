@@ -97,7 +97,7 @@ namespace QuizApi.Repositories
             await dBContext.SaveChangesAsync();
         }
 
-        public async Task UpdateDataAsync(string id, CategoryDto categoryDto)
+        public async Task<CategoryDto> UpdateDataAsync(string id, CategoryDto categoryDto)
         {
             CategoryModel? category = await GetActiveCategoryByIdAsync(id);
 
@@ -111,6 +111,8 @@ namespace QuizApi.Repositories
 
             dBContext.Update(category);
             await dBContext.SaveChangesAsync();
+
+            return mapper.Map<CategoryDto>(category);
         }
 
         public async Task DeleteDataAsync(string id)
