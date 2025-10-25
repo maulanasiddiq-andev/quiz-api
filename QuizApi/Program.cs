@@ -69,7 +69,15 @@ builder.Services.AddDbContext<ActivityLogDBContext>(options =>
 
 builder.Services.RegisterRepositories();
 
+// for swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
 var app = builder.Build();
+
+// enable swagger
+app.UseSwagger();
+app.UseSwaggerUI();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
