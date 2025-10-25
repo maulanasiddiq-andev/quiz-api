@@ -1,9 +1,7 @@
 using AutoMapper;
 using Google.Apis.Auth;
-using MailKit.Net.Smtp;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using MimeKit;
 using QuizApi.Constants;
 using QuizApi.DTOs.Auth;
 using QuizApi.DTOs.Identity;
@@ -13,6 +11,7 @@ using QuizApi.Helpers;
 using QuizApi.Models;
 using QuizApi.Models.Auth;
 using QuizApi.Models.Identity;
+using QuizApi.Services;
 using QuizApi.Settings;
 
 namespace QuizApi.Repositories
@@ -21,26 +20,26 @@ namespace QuizApi.Repositories
     {
         private readonly QuizAppDBContext dBContext;
         private readonly PasswordHasherHelper passwordHasherHelper;
-        private readonly EmailSetting emailSetting;
         private readonly JWTSetting jwtSetting;
         private readonly GoogleSetting googleSetting;
         private readonly IMapper mapper;
         private readonly RoleRepository roleRepository;
+        private readonly EmailService emailService;
         private readonly string userId = "";
         public AuthRepository(
             QuizAppDBContext dBContext,
-            IOptions<EmailSetting> emailOptions,
             IOptions<JWTSetting> jwtOptions,
             IOptions<GoogleSetting> googleOptions,
             IHttpContextAccessor httpContextAccessor,
             IMapper mapper,
-            RoleRepository roleRepository
+            RoleRepository roleRepository,
+            EmailService emailService
         )
         {
             this.dBContext = dBContext;
             this.mapper = mapper;
             this.roleRepository = roleRepository;
-            emailSetting = emailOptions.Value;
+            this.emailService = emailService;
             jwtSetting = jwtOptions.Value;
             googleSetting = googleOptions.Value;
             passwordHasherHelper = new PasswordHasherHelper();
@@ -98,24 +97,11 @@ namespace QuizApi.Repositories
             await dBContext.AddAsync(otp);
             await dBContext.SaveChangesAsync();
 
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("MS Developer Video App", "maulanasiddiqdeveloper@gmail.com"));
-            message.To.Add(new MailboxAddress(user.Name, user.Email));
-            message.Subject = "Kode OTP";
-
-            message.Body = new TextPart("plain")
-            {
-                Text = $"Kode OTP Anda adalah {otpCode}"
-            };
-
-            using (var client = new SmtpClient())
-            {
-                client.Connect(emailSetting.SmtpServer, emailSetting.Port, MailKit.Security.SecureSocketOptions.StartTls);
-                client.Authenticate(emailSetting.Username, emailSetting.Password);
-
-                client.Send(message);
-                client.Disconnect(true);
-            }
+            await emailService.SendEmailAsync(
+                user.Name,
+                user.Email,
+                $"Kode OTP Anda adalah {otpCode}"
+            );
         }
 
         public async Task CheckOtpValidationAsync(CheckOtpDto checkOtpDto)
