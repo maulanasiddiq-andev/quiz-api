@@ -83,6 +83,7 @@ namespace QuizApi.Repositories
             user.Name = userDto.Name;
             user.Email = userDto.Email;
             user.Description = userDto.Description ?? "";
+            user.ProfileImage = userDto.ProfileImage;
 
             dBContext.Update(user);
             await dBContext.SaveChangesAsync();
@@ -106,7 +107,8 @@ namespace QuizApi.Repositories
         private async Task<UserModel?> GetActiveUserByIdAsync(string id)
         {
             return await dBContext.User
-                .Where(x => x.UserId.Equals(id) && x.RecordStatus.ToLower().Equals(RecordStatusConstant.Active.ToLower()))
+                .Where(x => x.UserId.Equals(id) && x.RecordStatus == RecordStatusConstant.Active)
+                .Include(x => x.Role)
                 .FirstOrDefaultAsync();
         }
     }

@@ -1,16 +1,16 @@
 using FluentValidation;
 
-namespace QuizApi.DTOs.Quiz
+namespace QuizApi.DTOs.Request
 {
-    public class UploadQuizImageDto
+    public class UploadImageDto
     {
         public IFormFile? Image { get; set; }
         public string Directory { get; set; } = "";
     }
 
-    public class UploadQuizImageValidator : AbstractValidator<UploadQuizImageDto>
+    public class UploadImageValidator : AbstractValidator<UploadImageDto>
     {
-        public UploadQuizImageValidator()
+        public UploadImageValidator()
         {
             RuleFor(x => x.Image)
                 .NotNull().WithMessage("Gambar tidak boleh kosong")

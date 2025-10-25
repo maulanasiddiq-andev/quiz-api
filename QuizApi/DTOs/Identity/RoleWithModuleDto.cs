@@ -9,6 +9,7 @@ namespace QuizApi.DTOs.Identity
         
         public string RoleId { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
+        public bool IsMain { get; set; }
         public List<SelectModuleDto> RoleModules { get; set; }
     }
 }
