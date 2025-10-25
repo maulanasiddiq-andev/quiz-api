@@ -75,6 +75,7 @@ namespace QuizApi.Repositories
         }
 
         // GET role by id
+        // used for JWT
         public async Task<RoleDto> GetDataByIdAsync(string id)
         {
             RoleModel? role = await GetActiveRoleByIdAsync(id);
@@ -85,11 +86,14 @@ namespace QuizApi.Repositories
             }
 
             RoleDto roleDto = mapper.Map<RoleDto>(role);
+            List<RoleModuleModel> roleModules = await GetRoleModulesByRoleId(id);
+            roleDto.RoleModules = mapper.Map<List<RoleModuleDto>>(roleModules);
 
             return roleDto;
         }
 
         // GET role by id (with-modules)
+        // used for updating role modules
         public async Task<RoleWithModuleDto> GetRoleByIdWithModulesAsync(string id)
         {
             RoleModel? role = await GetActiveRoleByIdAsync(id);
@@ -157,23 +161,24 @@ namespace QuizApi.Repositories
         }
 
         // PUT update role by id
-        public async Task UpdateDataAsync(string id, RoleDto roleDto)
+        public async Task UpdateDataAsync(string roleId, RoleWithModuleDto roleWithModuleDto)
         {
-            RoleModel? role = await GetActiveRoleByIdAsync(id);
+            RoleModel? role = await GetActiveRoleByIdAsync(roleId);
 
             if (role is null)
             {
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
-            role.Name = roleDto.Name;
-            role.Description = roleDto.Description ?? "";
-            role.IsMain = roleDto.IsMain;
+            #region EditRole
+            role.Name = roleWithModuleDto.Name;
+            role.Description = roleWithModuleDto.Description ?? "";
+            role.IsMain = roleWithModuleDto.IsMain;
 
             // if the updated role is changed to main, change other roles to IsMain = false
             if (role.IsMain)
             {
-                List<RoleModel> roles = await dBContext.Role.Where(x => x.RoleId != id).ToListAsync();
+                List<RoleModel> roles = await dBContext.Role.Where(x => x.RoleId != roleId).ToListAsync();
 
                 foreach (var item in roles)
                 {
@@ -184,19 +189,9 @@ namespace QuizApi.Repositories
             }
 
             dBContext.Update(role);
-            await dBContext.SaveChangesAsync();
-        }
+            #endregion
 
-        // PUT update role by id (update-modules)
-        public async Task UpdateRoleModulesByIdAsync(string roleId, RoleWithModuleDto roleWithModuleDto)
-        {
-            RoleModel? role = await GetActiveRoleByIdAsync(roleId);
-
-            if (role is null)
-            {
-                throw new KnownException(ErrorMessageConstant.DataNotFound);
-            }
-
+            #region EditRoleModule
             var roleModules = await GetRoleModulesByRoleId(roleId);
 
             // check if the modules is selected or unselected
@@ -238,6 +233,7 @@ namespace QuizApi.Repositories
                 .ToListAsync();
 
             cacheService.RemoveUserRelatedCache(userIds);
+            #endregion
 
             await dBContext.SaveChangesAsync();
         }

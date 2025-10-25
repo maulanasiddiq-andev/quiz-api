@@ -127,27 +127,14 @@ namespace QuizApi.Controllers
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
         }
-
+        
         [HttpPut]
         [Route("{id}")]
-        public async Task<BaseResponse> UpdateRoleByIdAsync([FromRoute] string id, [FromBody] RoleDto roleDto)
+        public async Task<BaseResponse> UpdateRoleModulesByIdAsync([FromRoute] string id, [FromBody] RoleWithModuleDto roleWithModuleDto)
         {
             try
             {
-                if (roleDto is null || id is null)
-                {
-                    throw new KnownException(ErrorMessageConstant.MethodParameterNull);
-                }
-
-                var validator = new RoleValidator();
-                var results = validator.Validate(roleDto);
-                if (!results.IsValid)
-                {
-                    var messages = results.Errors.Select(x => x.ErrorMessage).ToList();
-                    return new BaseResponse(false, messages);
-                }
-
-                await roleRepository.UpdateDataAsync(id, roleDto);
+                await roleRepository.UpdateDataAsync(id, roleWithModuleDto);
 
                 return new BaseResponse(true, "Role berhasil diupdate", null);
             }
@@ -160,30 +147,6 @@ namespace QuizApi.Controllers
             catch (DbUpdateConcurrencyException)
             {
                 return new BaseResponse(false, ErrorMessageConstant.ItemAlreadyChanged, null);
-            }
-            catch (Exception ex)
-            {
-                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
-
-                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
-            }
-        }
-        
-        [HttpPut]
-        [Route("{id}/update-modules")]
-        public async Task<BaseResponse> UpdateRoleModulesByIdAsync([FromRoute] string id, [FromBody] RoleWithModuleDto roleWithModuleDto)
-        {
-            try
-            {
-                await roleRepository.UpdateRoleModulesByIdAsync(id, roleWithModuleDto);
-
-                return new BaseResponse(true, "Role berhasil diupdate", null);
-            }
-            catch (KnownException ex)
-            {
-                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
-
-                return new BaseResponse(false, ex.Message, null);
             }
             catch (Exception ex)
             {
