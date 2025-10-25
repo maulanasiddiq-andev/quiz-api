@@ -187,6 +187,8 @@ namespace QuizApi.Controllers
                 var userAgent = string.IsNullOrEmpty(Request.Headers["User-Agent"]) ? "" : Request.Headers["User-Agent"].ToString();
 
                 TokenDto tokenDto = await _authRepository.GenerateAndSaveLoginToken(user, userAgent);
+
+                await _authRepository.UpdateLastLoginTimeAsync(user);
                 return new BaseResponse(true, "", tokenDto);
             }
             catch (Exception ex)
