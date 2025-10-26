@@ -27,6 +27,7 @@ namespace QuizApi.Controllers
             this.activityLogService = activityLogService;
         }
 
+        [RoleModuleValidation(ModuleConstant.SearchRole)]
         [HttpGet]
         public async Task<BaseResponse> SearchRolesAsync([FromQuery] SearchRequestDto searchRequest)
         {
@@ -44,6 +45,7 @@ namespace QuizApi.Controllers
             }
         }
 
+        [RoleModuleValidation(ModuleConstant.CreateRole)]
         [HttpPost]
         public async Task<BaseResponse> CreateRoleAsync([FromBody] RoleDto roleDto)
         {
@@ -80,6 +82,7 @@ namespace QuizApi.Controllers
             }
         }
 
+        [RoleModuleValidation(ModuleConstant.DetailRole)]
         [HttpGet]
         [Route("{id}")]
         public async Task<BaseResponse> GetRoleByIdAsync([FromRoute] string id)
@@ -104,6 +107,7 @@ namespace QuizApi.Controllers
             }
         }
 
+        [RoleModuleValidation(ModuleConstant.DetailRole)]
         [HttpGet]
         [Route("{id}/with-modules")]
         public async Task<BaseResponse> GetRoleByIdWithModulesAsync([FromRoute] string id)
@@ -128,6 +132,7 @@ namespace QuizApi.Controllers
             }
         }
         
+        [RoleModuleValidation(ModuleConstant.EditRole)]
         [HttpPut]
         [Route("{id}")]
         public async Task<BaseResponse> UpdateRoleModulesByIdAsync([FromRoute] string id, [FromBody] RoleWithModuleDto roleWithModuleDto)

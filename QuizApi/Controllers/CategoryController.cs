@@ -30,6 +30,7 @@ namespace QuizApi.Controllers
             this.activityLogService = activityLogService;
         }
 
+        [RoleModuleValidation(ModuleConstant.CreateCategory)]
         [HttpPost]
         public async Task<BaseResponse> CreateCategoryAsync([FromBody] CategoryDto category)
         {
@@ -61,6 +62,7 @@ namespace QuizApi.Controllers
             }
         }
 
+        [RoleModuleValidation(ModuleConstant.SearchCategory)]
         [HttpGet]
         public async Task<BaseResponse> SearchCategoriesAsync([FromQuery] SearchRequestDto searchRequest)
         {
@@ -78,6 +80,7 @@ namespace QuizApi.Controllers
             }
         }
 
+        [RoleModuleValidation(ModuleConstant.DetailCategory)]
         [HttpGet("{id}")]
         public async Task<BaseResponse> GetCategoryByIdAsync([FromRoute] string id)
         {
@@ -106,6 +109,7 @@ namespace QuizApi.Controllers
             }
         }
 
+        [RoleModuleValidation(ModuleConstant.EditCategory)]
         [HttpPut]
         [Route("{id}")]
         public async Task<BaseResponse> UpdateCategoryByIdAsync([FromRoute] string id, [FromBody] CategoryDto category)
@@ -147,6 +151,7 @@ namespace QuizApi.Controllers
             }
         }
 
+        [RoleModuleValidation(ModuleConstant.DeleteCategory)]
         [HttpDelete]
         [Route("{id}")]
         public async Task<BaseResponse> DeleteCategoryByIdAsync([FromRoute] string id)
