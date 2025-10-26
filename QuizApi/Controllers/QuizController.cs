@@ -7,7 +7,6 @@ using QuizApi.DTOs.CheckQuiz;
 using QuizApi.DTOs.Request;
 using QuizApi.Exceptions;
 using QuizApi.Extensions;
-using QuizApi.Helpers;
 using QuizApi.Repositories;
 using QuizApi.Responses;
 using QuizApi.Services;
@@ -31,6 +30,7 @@ namespace QuizApi.Controllers
             this.activityLogService = activityLogService;
         }
 
+        [RoleModuleValidation(ModuleConstant.SearchQuiz)]
         [HttpGet]
         public async Task<BaseResponse> SearchQuizzesAsync([FromQuery] QuizFilterDto searchRequest)
         {
@@ -48,6 +48,7 @@ namespace QuizApi.Controllers
             }
         }
 
+        [RoleModuleValidation(ModuleConstant.CreateQuiz)]
         [HttpPost]
         public async Task<BaseResponse> CreateQuizAsync([FromBody] QuizDto quizDto)
         {
@@ -84,6 +85,7 @@ namespace QuizApi.Controllers
             }
         }
 
+        [RoleModuleValidation(ModuleConstant.DetailQuiz)]
         [HttpGet("{id}")]
         public async Task<BaseResponse> GetQuizByIdAsync([FromRoute] string id)
         {
@@ -112,6 +114,7 @@ namespace QuizApi.Controllers
             }
         }
         
+        [RoleModuleValidation(ModuleConstant.DetailQuiz)]
         [HttpGet("{id}/take-quiz")]
         public async Task<BaseResponse> GetQuizWithQuestionsByIdAsync([FromRoute] string id)
         {
@@ -140,6 +143,7 @@ namespace QuizApi.Controllers
             }
         }
 
+        [RoleModuleValidation(ModuleConstant.DeleteQuiz)]
         [HttpDelete]
         [Route("{id}")]
         public async Task<BaseResponse> DeleteCategoryByIdAsync([FromRoute] string id)
@@ -164,6 +168,7 @@ namespace QuizApi.Controllers
             }
         }
 
+        [RoleModuleValidation(ModuleConstant.DetailQuiz)]
         [HttpPost]
         [Route("{id}/check-quiz")]
         public async Task<BaseResponse> TakeQuizAsync([FromBody] CheckQuizDto checkQuizDto, [FromRoute] string id)
@@ -188,6 +193,7 @@ namespace QuizApi.Controllers
             }
         }
 
+        [RoleModuleValidation(ModuleConstant.DetailQuiz)]
         [HttpGet]
         [Route("{id}/history")]
         public async Task<BaseResponse> GetHistoriesByQuizIdAsync([FromQuery] SearchRequestDto searchRequest, [FromRoute] string id)
