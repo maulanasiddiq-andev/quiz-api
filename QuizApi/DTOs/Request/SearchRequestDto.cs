@@ -6,5 +6,6 @@ namespace QuizApi.DTOs.Request
         public int CurrentPage { get; set; } = 0;
         public string OrderBy { get; set; } = "createdTime";
         public string OrderDir { get; set; } = "desc";
+        public string Search { get; set; } = "";
     }
 }

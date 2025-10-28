@@ -42,7 +42,14 @@ namespace QuizApi.Repositories
                 .Where(x => x.RecordStatus == RecordStatusConstant.Active)
                 .Select(MapQuiz);
 
-            #region 
+
+
+            #region Query
+            if (!string.IsNullOrWhiteSpace(searchRequest.Search))
+            {
+                listQuizzesQuery = listQuizzesQuery.Where(x => EF.Functions.ILike(x.Title, $"%{searchRequest.Search}%"));
+            }
+            
             if (!string.IsNullOrEmpty(searchRequest.CategoryId))
             {
                 listQuizzesQuery = listQuizzesQuery.Where(x => x.CategoryId == searchRequest.CategoryId).AsQueryable();
