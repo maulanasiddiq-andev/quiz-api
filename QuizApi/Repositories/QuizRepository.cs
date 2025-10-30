@@ -13,6 +13,7 @@ using QuizApi.Models;
 using QuizApi.Models.Quiz;
 using QuizApi.Models.QuizHistory;
 using QuizApi.Responses;
+using QuizApi.DTOs.Identity;
 
 namespace QuizApi.Repositories
 {
@@ -38,11 +39,27 @@ namespace QuizApi.Repositories
 
         public async Task<SearchResponse> SearchDatasAsync(QuizFilterDto searchRequest)
         {
-            IQueryable<QuizModel> listQuizzesQuery = dBContext.Quiz
+            IQueryable<QuizDto> listQuizzesQuery = dBContext.Quiz
                 .Where(x => x.RecordStatus == RecordStatusConstant.Active)
-                .Select(MapQuiz);
-
-
+                .Select(x => new QuizDto
+                {
+                    QuizId = x.QuizId,
+                    Title = x.Title,
+                    Description = x.Description,
+                    ImageUrl = x.ImageUrl,
+                    CategoryId = x.CategoryId,
+                    Category = mapper.Map<CategoryDto>(x.Category),
+                    Time = x.Time,
+                    UserId = x.UserId,
+                    CreatedBy = x.CreatedBy,
+                    CreatedTime = x.CreatedTime,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedTime = x.ModifiedTime,
+                    Version = x.Version,
+                    RecordStatus = x.RecordStatus,
+                    QuestionCount = x.Questions.Count(),
+                    HistoriesCount = x.Histories.Count()
+                });
 
             #region Query
             if (!string.IsNullOrWhiteSpace(searchRequest.Search))
@@ -82,7 +99,7 @@ namespace QuizApi.Repositories
             var take = searchRequest.PageSize;
             var listQuiz = await listQuizzesQuery.Skip(skip).Take(take).ToListAsync();
 
-            response.Items = mapper.Map<List<QuizDto>>(listQuiz);
+            response.Items = listQuiz;
 
             return response;
         }
@@ -135,16 +152,36 @@ namespace QuizApi.Repositories
 
         public async Task<QuizDto> GetDataByIdAsync(string id)
         {
-            QuizModel? quiz = await GetActiveQuizByIdAsync(id);
+            QuizDto? quiz = await dBContext.Quiz
+                .Where(x => x.QuizId.Equals(id) && x.RecordStatus == RecordStatusConstant.Active)
+                .Select(x => new QuizDto
+                {
+                    QuizId = x.QuizId,
+                    Title = x.Title,
+                    Description = x.Description,
+                    ImageUrl = x.ImageUrl,
+                    CategoryId = x.CategoryId,
+                    Category = mapper.Map<CategoryDto>(x.Category),
+                    Time = x.Time,
+                    UserId = x.UserId,
+                    User = mapper.Map<SimpleUserDto>(x.User),
+                    CreatedBy = x.CreatedBy,
+                    CreatedTime = x.CreatedTime,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedTime = x.ModifiedTime,
+                    Version = x.Version,
+                    RecordStatus = x.RecordStatus,
+                    QuestionCount = x.Questions.Count(),
+                    HistoriesCount = x.Histories.Count()
+                })
+                .FirstOrDefaultAsync();
 
             if (quiz is null)
             {
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
-            QuizDto quizDto = mapper.Map<QuizDto>(quiz);
-
-            return quizDto;
+            return quiz;
         }
 
         public async Task<TakeQuizDto> GetQuizWithQuestionsByIdAsync(string quizId)
@@ -173,7 +210,7 @@ namespace QuizApi.Repositories
 
         public async Task DeleteDataAsync(string id)
         {
-            QuizModel? quiz = await GetActiveQuizByIdAsync(id);
+            QuizModel? quiz = await dBContext.Quiz.Where(x => x.QuizId == id && x.RecordStatus == RecordStatusConstant.Active).FirstOrDefaultAsync();
 
             if (quiz is null)
             {
@@ -185,88 +222,6 @@ namespace QuizApi.Repositories
             dBContext.Update(quiz);
             await dBContext.SaveChangesAsync();
         }
-
-        private async Task<QuizModel?> GetActiveQuizByIdAsync(string id)
-        {
-            QuizModel? quiz = await dBContext.Quiz
-                .Where(x => x.QuizId.Equals(id) && x.RecordStatus == RecordStatusConstant.Active)
-                .Select(MapQuiz)
-                .FirstOrDefaultAsync();
-
-            return quiz;
-        }
-
-        // private Expression<Func<QuizModel, QuizModel>> MapQuizWithQuestions = quiz => new QuizModel
-        // {
-        //     QuizId = quiz.QuizId,
-        //     Category = quiz.Category,
-        //     CategoryId = quiz.CategoryId,
-        //     CreatedBy = quiz.CreatedBy,
-        //     CreatedTime = quiz.CreatedTime,
-        //     DeletedBy = quiz.DeletedBy,
-        //     DeletedTime = quiz.DeletedTime,
-        //     Description = quiz.Description,
-        //     ImageUrl = quiz.ImageUrl,
-        //     ModifiedBy = quiz.ModifiedBy,
-        //     ModifiedTime = quiz.ModifiedTime,
-        //     RecordStatus = quiz.RecordStatus,
-        //     Time = quiz.Time,
-        //     Title = quiz.Title,
-        //     User = quiz.User,
-        //     UserId = quiz.UserId,
-        //     Version = quiz.Version,
-        //     Questions = quiz.Questions
-        //         .Where(q => q.RecordStatus == RecordStatusConstant.Active)
-        //         .OrderBy(x => x.QuestionOrder)
-        //         .Select(q => new QuestionModel
-        //         {
-        //             QuestionId = q.QuestionId,
-        //             QuizId = q.QuizId,
-        //             Text = q.Text,
-        //             RecordStatus = q.RecordStatus,
-        //             Answers = q.Answers
-        //                 .Where(a => a.RecordStatus == RecordStatusConstant.Active)
-        //                 .OrderBy(a => a.AnswerOrder)
-        //                 .Select(a => a)
-        //                 .ToList(),
-        //             CreatedBy = q.CreatedBy,
-        //             QuestionOrder = q.QuestionOrder,
-        //             CreatedTime = q.CreatedTime,
-        //             DeletedBy = q.DeletedBy,
-        //             DeletedTime = q.DeletedTime,
-        //             Description = q.Description,
-        //             ImageUrl = q.ImageUrl,
-        //             ModifiedBy = q.ModifiedBy,
-        //             ModifiedTime = q.ModifiedTime,
-        //             Version = q.Version
-        //         })
-        //         .ToList(),
-        //     QuestionsCount = quiz.Questions.Count,
-        //     HistoriesCount = quiz.Histories.Count
-        // };
-
-        private Expression<Func<QuizModel, QuizModel>> MapQuiz = quiz => new QuizModel
-        {
-            QuizId = quiz.QuizId,
-            Category = quiz.Category,
-            CategoryId = quiz.CategoryId,
-            CreatedBy = quiz.CreatedBy,
-            CreatedTime = quiz.CreatedTime,
-            DeletedBy = quiz.DeletedBy,
-            DeletedTime = quiz.DeletedTime,
-            Description = quiz.Description,
-            ImageUrl = quiz.ImageUrl,
-            ModifiedBy = quiz.ModifiedBy,
-            ModifiedTime = quiz.ModifiedTime,
-            RecordStatus = quiz.RecordStatus,
-            Time = quiz.Time,
-            Title = quiz.Title,
-            User = quiz.User,
-            UserId = quiz.UserId,
-            Version = quiz.Version,
-            QuestionCount = quiz.Questions.Count,
-            HistoriesCount = quiz.Histories.Count
-        };
 
         public async Task<QuizHistoryModel> CheckQuizAsync(CheckQuizDto checkQuizDto, string quizId)
         {
