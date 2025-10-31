@@ -19,6 +19,8 @@ namespace QuizApi.Repositories
         private readonly QuizAppDBContext dBContext;
         private readonly string userId = "";
         private readonly CacheService cacheService;
+        private readonly ActionModelHelper actionModelHelper;
+        private readonly string tableName = "Role";
         public RoleRepository(
             IMapper mapper,
             QuizAppDBContext dBContext,
@@ -29,6 +31,7 @@ namespace QuizApi.Repositories
             this.mapper = mapper;
             this.dBContext = dBContext;
             this.cacheService = cacheService;
+            actionModelHelper = new ActionModelHelper();
 
             if (httpContextAccessor != null)
             {
@@ -149,12 +152,7 @@ namespace QuizApi.Repositories
         {
             RoleModel role = mapper.Map<RoleModel>(roleDto);
 
-            role.RoleId = Guid.NewGuid().ToString("N");
-            role.CreatedTime = DateTime.UtcNow;
-            role.ModifiedTime = DateTime.UtcNow;
-            role.CreatedBy = userId;
-            role.ModifiedBy = userId;
-            role.RecordStatus = RecordStatusConstant.Active;
+            actionModelHelper.AssignCreateModel(role, tableName, userId);
 
             await dBContext.AddAsync(role);
             await dBContext.SaveChangesAsync();
@@ -188,6 +186,7 @@ namespace QuizApi.Repositories
                 dBContext.UpdateRange(roles);
             }
 
+            actionModelHelper.AssignUpdateModel(role, userId);
             dBContext.Update(role);
             #endregion
 

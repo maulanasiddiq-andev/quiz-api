@@ -8,6 +8,7 @@ using QuizApi.Models.Quiz;
 using QuizApi.Responses;
 using QuizApi.Extensions;
 using QuizApi.Exceptions;
+using QuizApi.Helpers;
 
 namespace QuizApi.Repositories
 {
@@ -16,6 +17,8 @@ namespace QuizApi.Repositories
         private readonly QuizAppDBContext dBContext;
         private readonly IMapper mapper;
         private readonly string userId = "";
+        private readonly string tableName = "Category";
+        private readonly ActionModelHelper actionModelHelper;
         public CategoryRepository(
             QuizAppDBContext dBContext,
             IMapper mapper,
@@ -24,6 +27,7 @@ namespace QuizApi.Repositories
         {
             this.dBContext = dBContext;
             this.mapper = mapper;
+            actionModelHelper = new ActionModelHelper();
 
             if (httpContextAccessor != null)
             {
@@ -86,12 +90,7 @@ namespace QuizApi.Repositories
         {
             CategoryModel category = mapper.Map<CategoryModel>(categoryDto);
 
-            category.CategoryId = Guid.NewGuid().ToString("N");
-            category.CreatedTime = DateTime.UtcNow;
-            category.ModifiedTime = DateTime.UtcNow;
-            category.CreatedBy = userId;
-            category.ModifiedBy = userId;
-            category.RecordStatus = RecordStatusConstant.Active;
+            actionModelHelper.AssignCreateModel(category, tableName, userId);
 
             await dBContext.AddAsync(category);
             await dBContext.SaveChangesAsync();
@@ -109,6 +108,7 @@ namespace QuizApi.Repositories
             category.Name = categoryDto.Name;
             category.Description = categoryDto.Description ?? "";
 
+            actionModelHelper.AssignUpdateModel(category, userId);
             dBContext.Update(category);
             await dBContext.SaveChangesAsync();
 
@@ -124,7 +124,7 @@ namespace QuizApi.Repositories
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
-            category.RecordStatus = RecordStatusConstant.Deleted;
+            actionModelHelper.AssignDeleteModel(category, userId);
 
             dBContext.Update(category);
             await dBContext.SaveChangesAsync();
