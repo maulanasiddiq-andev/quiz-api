@@ -62,6 +62,8 @@ namespace QuizApi.Repositories
                     RecordStatus = x.RecordStatus,
                     QuestionCount = x.Questions.Count(),
                     HistoriesCount = x.Histories.Count(),
+                    // check if the current user has taken the quiz
+                    IsTakenByUser = x.Histories.Any(y => y.UserId == userId)
                 });
 
             #region Query
@@ -160,7 +162,9 @@ namespace QuizApi.Repositories
                     Version = x.Version,
                     RecordStatus = x.RecordStatus,
                     QuestionCount = x.Questions.Count(),
-                    HistoriesCount = x.Histories.Count()
+                    HistoriesCount = x.Histories.Count(),
+                    // check if the current user has taken the quiz
+                    IsTakenByUser = x.Histories.Any(y => y.UserId == userId)
                 })
                 .FirstOrDefaultAsync();
 
@@ -182,6 +186,13 @@ namespace QuizApi.Repositories
             if (quiz == null)
             {
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            // check if user has taken the quiz
+            // if yes, throw
+            if (quiz.Histories.Any(x => x.UserId == userId))
+            {
+                throw new KnownException("Anda sudah mengerjakan kuis ini");
             }
 
             TakeQuizDto quizDto = mapper.Map<TakeQuizDto>(quiz);
