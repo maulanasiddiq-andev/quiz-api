@@ -216,6 +216,12 @@ namespace QuizApi.Repositories
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
+            // only creator of the quiz can remove the quiz
+            if (quiz.UserId != userId)
+            {
+                throw new KnownException("Anda tidak diizinkan mengakses fitur ini");
+            }
+
             actionModelHelper.AssignDeleteModel(quiz, userId);
 
             dBContext.Update(quiz);
