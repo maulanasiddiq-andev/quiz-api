@@ -24,6 +24,7 @@ namespace QuizApi.Repositories
         private readonly GoogleSetting googleSetting;
         private readonly IMapper mapper;
         private readonly RoleRepository roleRepository;
+        private readonly UserRepository userRepository;
         private readonly EmailService emailService;
         private readonly string userId = "";
         public AuthRepository(
@@ -33,13 +34,15 @@ namespace QuizApi.Repositories
             IHttpContextAccessor httpContextAccessor,
             IMapper mapper,
             RoleRepository roleRepository,
-            EmailService emailService
+            EmailService emailService,
+            UserRepository userRepository
         )
         {
             this.dBContext = dBContext;
             this.mapper = mapper;
             this.roleRepository = roleRepository;
             this.emailService = emailService;
+            this.userRepository = userRepository;
             jwtSetting = jwtOptions.Value;
             googleSetting = googleOptions.Value;
             passwordHasherHelper = new PasswordHasherHelper();
@@ -184,7 +187,7 @@ namespace QuizApi.Repositories
                 // take only names, for assigning them to JWT and checking permission on every request
                 roleModuleNames = roleModules.Select(x => x.RoleModuleName).Order().ToList();
             }
-            
+
             DateTime expiredTime = DateTime.UtcNow.AddHours(jwtSetting.TokenExpiredTimeInHour);
             var jwtToken = AuthorizationHelper.GenerateJWTToken(jwtSetting, expiredTime, user, role?.Name, roleModuleNames);
 
@@ -225,6 +228,45 @@ namespace QuizApi.Repositories
             tokenDto.User.Role = role;
 
             return tokenDto;
+        }
+
+        public async Task<UserTokenModel> GetUserTokenModelByRefreshTokenAsync(TokenDto tokenDto)
+        {
+            UserTokenModel? userToken = await dBContext.UserToken
+                .Where(x => x.RefreshToken == tokenDto.RefreshToken)
+                .FirstOrDefaultAsync();
+
+            if (userToken == null)
+            {
+                throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            return userToken;
+        }
+        
+        public async Task<TokenDto> RefreshTokenAsync(TokenDto tokenDto, string userAgent)
+        {
+            // find old token
+            UserTokenModel userToken = await GetUserTokenModelByRefreshTokenAsync(tokenDto);
+
+            if (userToken.IsAccessAllowed == false)
+            {
+                throw new KnownException(ErrorMessageConstant.InvalidLogin);
+            }
+
+            // find user
+            UserDto? userDto = await userRepository.GetDataByIdAsync(userToken.UserId);
+
+            if (userDto == null)
+            {
+                throw new KnownException(ErrorMessageConstant.InvalidLogin);
+            }
+
+            UserModel user = mapper.Map<UserModel>(userDto);
+
+            TokenDto token = await GenerateAndSaveLoginToken(user, userAgent);
+
+            return token;
         }
 
         public async Task<UserDto> CheckAuthAsync()

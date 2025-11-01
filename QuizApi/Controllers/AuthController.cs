@@ -6,6 +6,7 @@ using QuizApi.Constants;
 using QuizApi.DTOs.Auth;
 using QuizApi.Exceptions;
 using QuizApi.Extensions;
+using QuizApi.Models.Auth;
 using QuizApi.Models.Identity;
 using QuizApi.Repositories;
 using QuizApi.Responses;
@@ -161,6 +162,36 @@ namespace QuizApi.Controllers
                 await _authRepository.UpdateLastLoginTimeAsync(user);
 
                 return new BaseResponse(true, "Login Berhasil", tokenDto);
+            }
+            catch (KnownException ex)
+            {
+                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ex.Message, null);
+            }
+            catch (Exception ex)
+            {
+                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
+        [HttpPost]
+        [Route("refresh-token")]
+        public async Task<BaseResponse> RefreshTokenAsync([FromBody] TokenDto tokenDto)
+        {
+            try
+            {
+                if (tokenDto == null || string.IsNullOrEmpty(tokenDto.RefreshToken) || string.IsNullOrEmpty(tokenDto.Token))
+                {
+                    throw new KnownException(ErrorMessageConstant.MethodParameterNull);
+                }
+
+                var userAgent = string.IsNullOrEmpty(Request.Headers["User-Agent"]) ? "" : Request.Headers["User-Agent"].ToString();
+                TokenDto token = await _authRepository.RefreshTokenAsync(tokenDto, userAgent);
+
+                return new BaseResponse(true, "Login Berhasil", token);
             }
             catch (KnownException ex)
             {
