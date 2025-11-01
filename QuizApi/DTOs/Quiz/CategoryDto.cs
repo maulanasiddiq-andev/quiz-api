@@ -4,8 +4,14 @@ namespace QuizApi.DTOs.Quiz
 {
     public class CategoryDto : BaseDto
     {
+        public CategoryDto()
+        {
+            IsMain = false;
+        }
+        
         public string CategoryId { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
+        public bool IsMain { get; set; }
     }
 
     public class CategoryValidator : AbstractValidator<CategoryDto>

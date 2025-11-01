@@ -131,7 +131,7 @@ namespace QuizApi.Controllers
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
         }
-        
+
         [RoleModuleValidation(ModuleConstant.EditRole)]
         [HttpPut]
         [Route("{id}")]
@@ -152,6 +152,28 @@ namespace QuizApi.Controllers
             catch (DbUpdateConcurrencyException)
             {
                 return new BaseResponse(false, ErrorMessageConstant.ItemAlreadyChanged, null);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
+        [HttpDelete]
+        [Route("{id}")]
+        public async Task<BaseResponse> DeleteRoleByIdAsync([FromRoute] string id)
+        {
+            try
+            {
+                return new BaseResponse(true, "Role berhasil diupdate", null);
+            }
+            catch (KnownException ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ex.Message, null);
             }
             catch (Exception ex)
             {
