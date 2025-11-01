@@ -159,6 +159,18 @@ namespace QuizApi.Repositories
         {
             RoleModel role = mapper.Map<RoleModel>(roleDto);
 
+            // if the added role is not main
+            // check if there is any main role
+            if (role.IsMain == false)
+            {
+                // if there is not any main role
+                // throw
+                if (await dBContext.Role.AnyAsync(x => x.IsMain == true) == false)
+                {
+                    throw new KnownException("Pilih satu role sebagai role default");
+                }
+            }
+
             actionModelHelper.AssignCreateModel(role, tableName, userId);
 
             await dBContext.AddAsync(role);
@@ -191,6 +203,16 @@ namespace QuizApi.Repositories
                 }
 
                 dBContext.UpdateRange(roles);
+            }
+            // if the edited role is false
+            // check if there is main role
+            else
+            {
+                // if there is not main role, throw
+                if (await dBContext.Role.AnyAsync(x => x.RoleId != roleId && x.IsMain == true) == false)
+                {
+                    throw new KnownException("Pilih satu role sebagai role default");
+                }
             }
 
             actionModelHelper.AssignUpdateModel(role, userId);
