@@ -41,6 +41,13 @@ namespace QuizApi.Repositories
                 .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId != userId)
                 .AsQueryable();
 
+            #region Query
+            if (!string.IsNullOrWhiteSpace(searchRequest.Search))
+            {
+                listUserQuery = listUserQuery.Where(x => EF.Functions.ILike(x.Name, $"%{searchRequest.Search}%"));
+            }
+            #endregion
+
             #region Ordering
             string orderBy = searchRequest.OrderBy;
             string orderDir = searchRequest.OrderDir;
