@@ -88,7 +88,9 @@ namespace QuizApi.Repositories
 
         public async Task UpdateDataAsync(string id, UserDto userDto)
         {
-            UserModel? user = await GetActiveUserByIdAsync(id);
+            UserModel? user = await dBContext.User
+                .Where(x => x.UserId.Equals(id) && x.RecordStatus == RecordStatusConstant.Active)
+                .FirstOrDefaultAsync();;
 
             if (user is null)
             {
@@ -99,6 +101,7 @@ namespace QuizApi.Repositories
             user.Email = userDto.Email;
             user.Description = userDto.Description ?? "";
             user.ProfileImage = userDto.ProfileImage;
+            user.RoleId = userDto.RoleId;
 
             actionModelHelper.AssignUpdateModel(user, userId);            
 
