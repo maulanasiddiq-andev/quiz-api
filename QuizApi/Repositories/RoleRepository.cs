@@ -19,6 +19,8 @@ namespace QuizApi.Repositories
         private readonly QuizAppDBContext dBContext;
         private readonly string userId = "";
         private readonly CacheService cacheService;
+        private readonly ActionModelHelper actionModelHelper;
+        private readonly string tableName = "Role";
         public RoleRepository(
             IMapper mapper,
             QuizAppDBContext dBContext,
@@ -29,6 +31,7 @@ namespace QuizApi.Repositories
             this.mapper = mapper;
             this.dBContext = dBContext;
             this.cacheService = cacheService;
+            actionModelHelper = new ActionModelHelper();
 
             if (httpContextAccessor != null)
             {
@@ -42,6 +45,13 @@ namespace QuizApi.Repositories
             IQueryable<RoleModel> listRoleQuery = dBContext.Role
                 .Where(x => x.RecordStatus.ToLower().Equals(RecordStatusConstant.Active.ToLower()))
                 .AsQueryable();
+
+            #region Query
+            if (!string.IsNullOrWhiteSpace(searchRequest.Search))
+            {
+                listRoleQuery = listRoleQuery.Where(x => EF.Functions.ILike(x.Name, $"%{searchRequest.Search}%"));
+            }
+            #endregion
 
             #region Ordering
             string orderBy = searchRequest.OrderBy;
@@ -149,12 +159,19 @@ namespace QuizApi.Repositories
         {
             RoleModel role = mapper.Map<RoleModel>(roleDto);
 
-            role.RoleId = Guid.NewGuid().ToString("N");
-            role.CreatedTime = DateTime.UtcNow;
-            role.ModifiedTime = DateTime.UtcNow;
-            role.CreatedBy = userId;
-            role.ModifiedBy = userId;
-            role.RecordStatus = RecordStatusConstant.Active;
+            // if the added role is not main
+            // check if there is any main role
+            if (role.IsMain == false)
+            {
+                // if there is not any main role
+                // throw
+                if (await dBContext.Role.AnyAsync(x => x.IsMain == true) == false)
+                {
+                    throw new KnownException("Pilih satu role sebagai role default");
+                }
+            }
+
+            actionModelHelper.AssignCreateModel(role, tableName, userId);
 
             await dBContext.AddAsync(role);
             await dBContext.SaveChangesAsync();
@@ -187,7 +204,18 @@ namespace QuizApi.Repositories
 
                 dBContext.UpdateRange(roles);
             }
+            // if the edited role is false
+            // check if there is main role
+            else
+            {
+                // if there is not main role, throw
+                if (await dBContext.Role.AnyAsync(x => x.RoleId != roleId && x.IsMain == true) == false)
+                {
+                    throw new KnownException("Pilih satu role sebagai role default");
+                }
+            }
 
+            actionModelHelper.AssignUpdateModel(role, userId);
             dBContext.Update(role);
             #endregion
 

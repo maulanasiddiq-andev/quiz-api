@@ -3,7 +3,9 @@ using Microsoft.EntityFrameworkCore;
 using QuizApi.Constants;
 using QuizApi.DTOs.Identity;
 using QuizApi.DTOs.Request;
+using QuizApi.Extensions;
 using QuizApi.Exceptions;
+using QuizApi.Helpers;
 using QuizApi.Models;
 using QuizApi.Models.Identity;
 using QuizApi.Responses;
@@ -14,17 +16,37 @@ namespace QuizApi.Repositories
     {
         private readonly QuizAppDBContext dBContext;
         private readonly IMapper mapper;
-        public UserRepository(QuizAppDBContext dBContext, IMapper mapper)
+        private readonly ActionModelHelper actionModelHelper;
+        private readonly string userId = "";
+        private readonly string tableName = "User";
+        public UserRepository(
+            QuizAppDBContext dBContext,
+            IMapper mapper,
+            IHttpContextAccessor httpContextAccessor
+        )
         {
             this.dBContext = dBContext;
             this.mapper = mapper;
+            actionModelHelper = new ActionModelHelper();
+
+            if (httpContextAccessor != null)
+            {
+                userId = httpContextAccessor.HttpContext?.GetUserId() ?? "";
+            }
         }
 
         public async Task<SearchResponse> SearchDatasAsync(SearchRequestDto searchRequest)
         {
             IQueryable<UserModel> listUserQuery = dBContext.User
-                .Where(x => x.RecordStatus == RecordStatusConstant.Active)
+                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId != userId)
                 .AsQueryable();
+
+            #region Query
+            if (!string.IsNullOrWhiteSpace(searchRequest.Search))
+            {
+                listUserQuery = listUserQuery.Where(x => EF.Functions.ILike(x.Name, $"%{searchRequest.Search}%"));
+            }
+            #endregion
 
             #region Ordering
             string orderBy = searchRequest.OrderBy;
@@ -73,7 +95,9 @@ namespace QuizApi.Repositories
 
         public async Task UpdateDataAsync(string id, UserDto userDto)
         {
-            UserModel? user = await GetActiveUserByIdAsync(id);
+            UserModel? user = await dBContext.User
+                .Where(x => x.UserId.Equals(id) && x.RecordStatus == RecordStatusConstant.Active)
+                .FirstOrDefaultAsync();;
 
             if (user is null)
             {
@@ -84,6 +108,9 @@ namespace QuizApi.Repositories
             user.Email = userDto.Email;
             user.Description = userDto.Description ?? "";
             user.ProfileImage = userDto.ProfileImage;
+            user.RoleId = userDto.RoleId;
+
+            actionModelHelper.AssignUpdateModel(user, userId);            
 
             dBContext.Update(user);
             await dBContext.SaveChangesAsync();
@@ -98,7 +125,7 @@ namespace QuizApi.Repositories
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
-            user.RecordStatus = RecordStatusConstant.Deleted;
+            actionModelHelper.AssignDeleteModel(user, userId);
 
             dBContext.Update(user);
             await dBContext.SaveChangesAsync();

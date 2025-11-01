@@ -8,6 +8,7 @@ namespace QuizApi.DTOs.Quiz
         public QuizDto()
         {
             Questions = new List<QuestionDto>();
+            IsTakenByUser = false;
         }
 
         public string QuizId { get; set; } = string.Empty;
@@ -21,6 +22,7 @@ namespace QuizApi.DTOs.Quiz
         public List<QuestionDto> Questions { get; set; }
         public int QuestionCount { get; set; }
         public int HistoriesCount { get; set; }
+        public bool IsTakenByUser { get; set; }
     }
 
     public class QuizValidator : AbstractValidator<QuizDto>

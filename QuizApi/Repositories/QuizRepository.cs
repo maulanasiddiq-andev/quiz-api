@@ -14,6 +14,7 @@ using QuizApi.Models.Quiz;
 using QuizApi.Models.QuizHistory;
 using QuizApi.Responses;
 using QuizApi.DTOs.Identity;
+using QuizApi.Helpers;
 
 namespace QuizApi.Repositories
 {
@@ -22,6 +23,7 @@ namespace QuizApi.Repositories
         private readonly QuizAppDBContext dBContext;
         private readonly IMapper mapper;
         private readonly string userId = "";
+        private readonly ActionModelHelper actionModelHelper;
         public QuizRepository(
             QuizAppDBContext dBContext,
             IMapper mapper,
@@ -30,6 +32,7 @@ namespace QuizApi.Repositories
         {
             this.dBContext = dBContext;
             this.mapper = mapper;
+            actionModelHelper = new ActionModelHelper();
 
             if (httpContextAccessor != null)
             {
@@ -58,7 +61,9 @@ namespace QuizApi.Repositories
                     Version = x.Version,
                     RecordStatus = x.RecordStatus,
                     QuestionCount = x.Questions.Count(),
-                    HistoriesCount = x.Histories.Count()
+                    HistoriesCount = x.Histories.Count(),
+                    // check if the current user has taken the quiz
+                    IsTakenByUser = x.Histories.Any(y => y.UserId == userId)
                 });
 
             #region Query
@@ -108,37 +113,22 @@ namespace QuizApi.Repositories
         {
             QuizModel quiz = mapper.Map<QuizModel>(quizDto);
 
-            quiz.QuizId = Guid.NewGuid().ToString("N");
             quiz.UserId = userId;
-            quiz.CreatedTime = DateTime.UtcNow;
-            quiz.ModifiedTime = DateTime.UtcNow;
-            quiz.CreatedBy = userId;
-            quiz.ModifiedBy = userId;
-            quiz.RecordStatus = RecordStatusConstant.Active;
+            actionModelHelper.AssignCreateModel(quiz, "Quiz", userId);
 
             int questionOrder = 0;
             foreach (var question in quiz.Questions)
             {
-                question.QuestionId = Guid.NewGuid().ToString("N");
                 question.QuizId = quiz.QuizId;
                 question.QuestionOrder = questionOrder;
-                question.CreatedTime = DateTime.UtcNow;
-                question.ModifiedTime = DateTime.UtcNow;
-                question.CreatedBy = userId;
-                question.ModifiedBy = userId;
-                question.RecordStatus = RecordStatusConstant.Active;
+                actionModelHelper.AssignCreateModel(question, "Question", userId);
 
                 int answerOrder = 0;
                 foreach (var answer in question.Answers)
                 {
-                    answer.AnswerId = Guid.NewGuid().ToString("N");
                     answer.QuestionId = question.QuestionId;
                     answer.AnswerOrder = answerOrder;
-                    answer.CreatedTime = DateTime.UtcNow;
-                    answer.ModifiedTime = DateTime.UtcNow;
-                    answer.CreatedBy = userId;
-                    answer.ModifiedBy = userId;
-                    answer.RecordStatus = RecordStatusConstant.Active;
+                    actionModelHelper.AssignCreateModel(answer, "Answer", userId);
 
                     answerOrder++;
                 }
@@ -172,7 +162,9 @@ namespace QuizApi.Repositories
                     Version = x.Version,
                     RecordStatus = x.RecordStatus,
                     QuestionCount = x.Questions.Count(),
-                    HistoriesCount = x.Histories.Count()
+                    HistoriesCount = x.Histories.Count(),
+                    // check if the current user has taken the quiz
+                    IsTakenByUser = x.Histories.Any(y => y.UserId == userId)
                 })
                 .FirstOrDefaultAsync();
 
@@ -196,6 +188,13 @@ namespace QuizApi.Repositories
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
+            // check if user has taken the quiz
+            // if yes, throw
+            if (quiz.Histories.Any(x => x.UserId == userId))
+            {
+                throw new KnownException("Anda sudah mengerjakan kuis ini");
+            }
+
             TakeQuizDto quizDto = mapper.Map<TakeQuizDto>(quiz);
 
             foreach (var question in quizDto.Questions)
@@ -217,7 +216,13 @@ namespace QuizApi.Repositories
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
-            quiz.RecordStatus = RecordStatusConstant.Deleted;
+            // only creator of the quiz can remove the quiz
+            if (quiz.UserId != userId)
+            {
+                throw new KnownException("Anda tidak diizinkan mengakses fitur ini");
+            }
+
+            actionModelHelper.AssignDeleteModel(quiz, userId);
 
             dBContext.Update(quiz);
             await dBContext.SaveChangesAsync();
@@ -238,22 +243,17 @@ namespace QuizApi.Repositories
             // map quiz model to quiz history model, then check the answers with check quiz dto
             QuizHistoryModel quizHistory = mapper.Map<QuizHistoryModel>(quiz);
 
-            quizHistory.QuizHistoryId = Guid.NewGuid().ToString("N");
             quizHistory.QuizId = quizId;
             quizHistory.QuizVersion = checkQuizDto.QuizVersion;
             quizHistory.UserId = userId;
-            quizHistory.CreatedBy = userId;
-            quizHistory.CreatedTime = DateTime.UtcNow;
             quizHistory.Description = "";
-            quizHistory.ModifiedBy = userId;
-            quizHistory.ModifiedTime = DateTime.UtcNow;
-            quizHistory.RecordStatus = RecordStatusConstant.Active;
+            actionModelHelper.AssignCreateModel(quizHistory, "QuizHistory", userId);
 
             // check every question from the quiz
             foreach (var question in quizHistory.Questions)
             {
-                question.QuestionHistoryId = Guid.NewGuid().ToString("N");
                 question.QuizHistoryId = quizHistory.QuizHistoryId;
+                actionModelHelper.AssignCreateModel(question, "QuestionHistory", userId);
 
                 // question about to be checked
                 CheckQuestionDto? checkQuestion = checkQuizDto.Questions.Where(x => x.QuestionOrder == question.QuestionOrder).FirstOrDefault();
@@ -284,8 +284,8 @@ namespace QuizApi.Repositories
                 // assign id for answers
                 foreach (var answer in question.Answers)
                 {
-                    answer.AnswerHistoryId = Guid.NewGuid().ToString("N");
                     answer.QuestionHistoryId = question.QuestionHistoryId;
+                    actionModelHelper.AssignCreateModel(answer, "AnswerHistory", userId);
                 }
 
                 question.Answers = question.Answers.OrderBy(x => x.AnswerOrder).ToList();
