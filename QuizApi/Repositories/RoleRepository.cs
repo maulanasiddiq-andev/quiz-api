@@ -46,6 +46,13 @@ namespace QuizApi.Repositories
                 .Where(x => x.RecordStatus.ToLower().Equals(RecordStatusConstant.Active.ToLower()))
                 .AsQueryable();
 
+            #region Query
+            if (!string.IsNullOrWhiteSpace(searchRequest.Search))
+            {
+                listRoleQuery = listRoleQuery.Where(x => EF.Functions.ILike(x.Name, $"%{searchRequest.Search}%"));
+            }
+            #endregion
+
             #region Ordering
             string orderBy = searchRequest.OrderBy;
             string orderDir = searchRequest.OrderDir;
