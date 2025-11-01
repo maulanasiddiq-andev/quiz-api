@@ -38,7 +38,7 @@ namespace QuizApi.Repositories
         public async Task<SearchResponse> SearchDatasAsync(SearchRequestDto searchRequest)
         {
             IQueryable<UserModel> listUserQuery = dBContext.User
-                .Where(x => x.RecordStatus == RecordStatusConstant.Active)
+                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId != userId)
                 .AsQueryable();
 
             #region Ordering
