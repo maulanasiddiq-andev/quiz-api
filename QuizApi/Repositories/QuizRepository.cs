@@ -310,6 +310,7 @@ namespace QuizApi.Repositories
             IQueryable<QuizHistoryModel> listQuizHistoriesQuery = dBContext.QuizHistory
                 .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.QuizId.Equals(quizId))
                 .Include(x => x.User)
+                .Include(x => x.Quiz)
                 .AsQueryable();
 
             #region Ordering
