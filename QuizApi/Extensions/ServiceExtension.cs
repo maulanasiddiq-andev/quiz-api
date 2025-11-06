@@ -21,6 +21,7 @@ namespace QuizApi.Extensions
             collection.AddScoped<CacheService>();
             collection.AddScoped<RoleModuleValidationService>();
             collection.AddScoped<EmailService>();
+            collection.AddScoped<PushNotificationService>();
         }
     }
 }

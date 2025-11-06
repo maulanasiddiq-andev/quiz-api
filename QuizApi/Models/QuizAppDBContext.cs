@@ -22,5 +22,7 @@ namespace QuizApi.Models
         public DbSet<QuizHistoryModel> QuizHistory { get; set; }
         public DbSet<QuestionHistoryModel> QuestionHistory { get; set; }
         public DbSet<AnswerHistoryModel> AnswerHistory { get; set; }
+        // fcm token is for push notification
+        public DbSet<FcmTokenModel> FcmToken { get; set; }
     }
 }

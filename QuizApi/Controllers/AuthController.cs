@@ -161,6 +161,12 @@ namespace QuizApi.Controllers
                 TokenDto tokenDto = await _authRepository.GenerateAndSaveLoginToken(user, userAgent);
                 await _authRepository.UpdateLastLoginTimeAsync(user);
 
+                // create fcm token for push notification
+                if (!string.IsNullOrWhiteSpace(loginDto.FcmToken))
+                {
+                    await _authRepository.CreateFcmTokenAsync(loginDto.FcmToken, loginDto.Device, user.UserId);
+                }
+
                 return new BaseResponse(true, "Login Berhasil", tokenDto);
             }
             catch (KnownException ex)
@@ -220,6 +226,13 @@ namespace QuizApi.Controllers
                 TokenDto tokenDto = await _authRepository.GenerateAndSaveLoginToken(user, userAgent);
 
                 await _authRepository.UpdateLastLoginTimeAsync(user);
+
+                // create fcm token for push notification
+                if (!string.IsNullOrWhiteSpace(loginWithGoogleDto.FcmToken))
+                {
+                    await _authRepository.CreateFcmTokenAsync(loginWithGoogleDto.FcmToken, loginWithGoogleDto.Device, user.UserId);
+                }
+                
                 return new BaseResponse(true, "", tokenDto);
             }
             catch (Exception ex)

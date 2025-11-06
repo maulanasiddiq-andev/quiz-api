@@ -27,6 +27,7 @@ namespace QuizApi.Repositories
         private readonly UserRepository userRepository;
         private readonly EmailService emailService;
         private readonly string userId = "";
+        private readonly ActionModelHelper actionModelHelper;
         public AuthRepository(
             QuizAppDBContext dBContext,
             IOptions<JWTSetting> jwtOptions,
@@ -46,6 +47,7 @@ namespace QuizApi.Repositories
             jwtSetting = jwtOptions.Value;
             googleSetting = googleOptions.Value;
             passwordHasherHelper = new PasswordHasherHelper();
+            actionModelHelper = new ActionModelHelper();
 
             if (httpContextAccessor != null)
             {
@@ -316,7 +318,7 @@ namespace QuizApi.Repositories
                 ProfileImage = payload.Picture
             };
 
-             // get the main role for being assigned to newly added user for default
+            // get the main role for being assigned to newly added user for default
             RoleModel? role = await dBContext.Role.Where(x => x.IsMain == true).FirstOrDefaultAsync();
 
             if (role != null)
@@ -328,6 +330,22 @@ namespace QuizApi.Repositories
             await dBContext.SaveChangesAsync();
 
             return newUser;
+        }
+        
+        // create fcm token when the user is logged in
+        public async Task CreateFcmTokenAsync(string fcmToken, string? device, string userId)
+        {
+            FcmTokenModel storedFcmToken = new FcmTokenModel
+            {
+                Token = fcmToken,
+                Device = device ?? "",
+                UserId = userId
+            };
+
+            actionModelHelper.AssignCreateModel(storedFcmToken, "FcmToken", userId);
+
+            await dBContext.AddAsync(storedFcmToken);
+            await dBContext.SaveChangesAsync();
         }
     }
 }

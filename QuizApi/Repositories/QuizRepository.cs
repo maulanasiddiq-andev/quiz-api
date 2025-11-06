@@ -15,6 +15,8 @@ using QuizApi.Models.QuizHistory;
 using QuizApi.Responses;
 using QuizApi.DTOs.Identity;
 using QuizApi.Helpers;
+using QuizApi.Services;
+using QuizApi.Models.Identity;
 
 namespace QuizApi.Repositories
 {
@@ -24,14 +26,17 @@ namespace QuizApi.Repositories
         private readonly IMapper mapper;
         private readonly string userId = "";
         private readonly ActionModelHelper actionModelHelper;
+        private readonly PushNotificationService pushNotificationService;
         public QuizRepository(
             QuizAppDBContext dBContext,
             IMapper mapper,
-            IHttpContextAccessor httpContextAccessor
+            IHttpContextAccessor httpContextAccessor,
+            PushNotificationService pushNotificationService
         )
         {
             this.dBContext = dBContext;
             this.mapper = mapper;
+            this.pushNotificationService = pushNotificationService;
             actionModelHelper = new ActionModelHelper();
 
             if (httpContextAccessor != null)
@@ -301,6 +306,21 @@ namespace QuizApi.Repositories
 
             await dBContext.AddAsync(quizHistory);
             await dBContext.SaveChangesAsync();
+
+            // send push notification for the creator
+            FcmTokenModel? fcmToken = await dBContext.FcmToken.Where(x => x.UserId == quiz.UserId).FirstOrDefaultAsync();
+            if (fcmToken != null)
+            {
+                UserModel? quizTaker = await dBContext.User.Where(x => x.UserId == userId).FirstOrDefaultAsync();
+                if (quizTaker != null)
+                {
+                    await pushNotificationService.SendNotificationAsync(
+                        fcmToken.Token,
+                        "Kuis Dikerjakan",
+                        $"{quizTaker.Name} telah mengerjakan kuis anda yang berjudul {quiz.Title}"
+                    );   
+                }
+            }
 
             return quizHistory;
         }
