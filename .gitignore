@@ -123,3 +123,5 @@ _ReSharper*/
 *.bak
 *.swp
 *.swo
+
+firebase-service-account.json
