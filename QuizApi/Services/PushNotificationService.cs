@@ -50,11 +50,9 @@ namespace QuizApi.Services
         {
             // redirect the app to firebase service account
             // the file is related to the compiled app
-            var path = Path.Combine(AppContext.BaseDirectory, "firebase-service-account.json");
+            // var path = Path.Combine(AppContext.BaseDirectory, "firebase-service-account.json");
 
-            var credential = GoogleCredential
-                .FromFile(path)
-                .CreateScoped("https://www.googleapis.com/auth/firebase.messaging");
+            var credential = await GoogleCredential.GetApplicationDefaultAsync();
 
             var token = await credential.UnderlyingCredential.GetAccessTokenForRequestAsync();
             return token;
