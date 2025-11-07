@@ -268,5 +268,28 @@ namespace QuizApi.Controllers
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
         }
+
+        [HttpPost]
+        [Route("logout")]
+        [Authorize]
+        [TokenValidation]
+        public async Task<BaseResponse> LogoutAsync([FromBody] LogoutDto? logout)
+        {
+            try
+            {
+                if (logout != null)
+                {
+                    await _authRepository.LogoutAsync(logout);
+                }
+
+                return new BaseResponse(true, "Berhasil Logout", null);
+            }
+            catch (Exception ex)
+            {
+                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
     }
 }

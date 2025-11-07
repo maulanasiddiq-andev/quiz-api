@@ -331,11 +331,26 @@ namespace QuizApi.Repositories
 
             return newUser;
         }
-        
+
         // create fcm token when the user is logged in
         public async Task CreateFcmTokenAsync(string fcmToken, string? device, string userId)
         {
-            FcmTokenModel storedFcmToken = new FcmTokenModel
+            // check if fcm token is already registered in database
+            // if fcmtoken is already registered, update to active
+            FcmTokenModel? storedFcmToken = await dBContext.FcmToken.Where(x => x.Token == fcmToken && x.UserId == userId).FirstOrDefaultAsync();
+            if (storedFcmToken != null)
+            {
+                storedFcmToken.RecordStatus = RecordStatusConstant.Active;
+                actionModelHelper.AssignUpdateModel(storedFcmToken, userId);
+
+                dBContext.Update(storedFcmToken);
+                await dBContext.SaveChangesAsync();
+
+                return;
+            }
+            
+            // create a new one if there is no fcm token registered in database
+            storedFcmToken = new FcmTokenModel
             {
                 Token = fcmToken,
                 Device = device ?? "",
@@ -346,6 +361,22 @@ namespace QuizApi.Repositories
 
             await dBContext.AddAsync(storedFcmToken);
             await dBContext.SaveChangesAsync();
+        }
+        
+        public async Task LogoutAsync(LogoutDto logoutDto)
+        {
+            // remove fcm token related to the device logged out
+            FcmTokenModel? fcmToken = await dBContext.FcmToken
+                .Where(x => x.UserId == userId && x.Token == logoutDto.FcmToken && x.RecordStatus == RecordStatusConstant.Active)
+                .FirstOrDefaultAsync();
+            
+            if (fcmToken != null)
+            {
+                actionModelHelper.AssignDeleteModel(fcmToken, userId);
+
+                dBContext.Update(fcmToken);
+                await dBContext.SaveChangesAsync();
+            }
         }
     }
 }
