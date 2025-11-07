@@ -308,17 +308,24 @@ namespace QuizApi.Repositories
             await dBContext.SaveChangesAsync();
 
             // send push notification for the creator
-            FcmTokenModel? fcmToken = await dBContext.FcmToken.Where(x => x.UserId == quiz.UserId).FirstOrDefaultAsync();
-            if (fcmToken != null)
+            // the notification is sent to all devices related to the creator
+            List<FcmTokenModel> fcmTokens = await dBContext.FcmToken
+                .Where(x => x.UserId == quiz.UserId && x.RecordStatus == RecordStatusConstant.Active)
+                .ToListAsync();
+            // if there are fcm tokens (one or more)
+            if (fcmTokens.Any())
             {
                 UserModel? quizTaker = await dBContext.User.Where(x => x.UserId == userId).FirstOrDefaultAsync();
                 if (quizTaker != null)
                 {
-                    await pushNotificationService.SendNotificationAsync(
-                        fcmToken.Token,
-                        "Kuis Dikerjakan",
-                        $"{quizTaker.Name} telah mengerjakan kuis anda yang berjudul {quiz.Title}"
-                    );   
+                    foreach (var fcmToken in fcmTokens)
+                    {
+                        await pushNotificationService.SendNotificationAsync(
+                            fcmToken.Token,
+                            "Kuis Dikerjakan",
+                            $"{quizTaker.Name} telah mengerjakan kuis anda yang berjudul \"{quiz.Title}\""
+                        );   
+                    }   
                 }
             }
 
