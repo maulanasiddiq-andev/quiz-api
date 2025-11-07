@@ -266,6 +266,26 @@ namespace QuizApi.Repositories
             await dBContext.SaveChangesAsync();
         }
 
+        public async Task DeleteDataAsync(string id)
+        {
+            RoleModel? role = await GetActiveRoleByIdAsync(id);
+
+            if (role is null)
+            {
+                throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            if (role.IsMain == true)
+            {
+                throw new KnownException("Pilih satu role sebagai role default");
+            }
+
+            actionModelHelper.AssignDeleteModel(role, userId);
+
+            dBContext.Update(role);
+            await dBContext.SaveChangesAsync();
+        }
+
         private async Task<RoleModel?> GetActiveRoleByIdAsync(string id)
         {
             RoleModel? role = await dBContext.Role

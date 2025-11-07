@@ -15,6 +15,8 @@ using QuizApi.Models.QuizHistory;
 using QuizApi.Responses;
 using QuizApi.DTOs.Identity;
 using QuizApi.Helpers;
+using QuizApi.Services;
+using QuizApi.Models.Identity;
 
 namespace QuizApi.Repositories
 {
@@ -24,14 +26,17 @@ namespace QuizApi.Repositories
         private readonly IMapper mapper;
         private readonly string userId = "";
         private readonly ActionModelHelper actionModelHelper;
+        private readonly PushNotificationService pushNotificationService;
         public QuizRepository(
             QuizAppDBContext dBContext,
             IMapper mapper,
-            IHttpContextAccessor httpContextAccessor
+            IHttpContextAccessor httpContextAccessor,
+            PushNotificationService pushNotificationService
         )
         {
             this.dBContext = dBContext;
             this.mapper = mapper;
+            this.pushNotificationService = pushNotificationService;
             actionModelHelper = new ActionModelHelper();
 
             if (httpContextAccessor != null)
@@ -302,6 +307,28 @@ namespace QuizApi.Repositories
             await dBContext.AddAsync(quizHistory);
             await dBContext.SaveChangesAsync();
 
+            // send push notification for the creator
+            // the notification is sent to all devices related to the creator
+            List<FcmTokenModel> fcmTokens = await dBContext.FcmToken
+                .Where(x => x.UserId == quiz.UserId && x.RecordStatus == RecordStatusConstant.Active)
+                .ToListAsync();
+            // if there are fcm tokens (one or more)
+            if (fcmTokens.Any())
+            {
+                UserModel? quizTaker = await dBContext.User.Where(x => x.UserId == userId).FirstOrDefaultAsync();
+                if (quizTaker != null)
+                {
+                    foreach (var fcmToken in fcmTokens)
+                    {
+                        await pushNotificationService.SendNotificationAsync(
+                            fcmToken.Token,
+                            "Kuis Dikerjakan",
+                            $"{quizTaker.Name} telah mengerjakan kuis anda yang berjudul \"{quiz.Title}\""
+                        );   
+                    }   
+                }
+            }
+
             return quizHistory;
         }
 
@@ -310,6 +337,7 @@ namespace QuizApi.Repositories
             IQueryable<QuizHistoryModel> listQuizHistoriesQuery = dBContext.QuizHistory
                 .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.QuizId.Equals(quizId))
                 .Include(x => x.User)
+                .Include(x => x.Quiz)
                 .AsQueryable();
 
             #region Ordering

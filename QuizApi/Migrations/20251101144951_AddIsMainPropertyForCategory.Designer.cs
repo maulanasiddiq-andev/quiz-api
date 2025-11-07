@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using QuizApi.Models;
@@ -11,9 +12,11 @@ using QuizApi.Models;
 namespace QuizApi.Migrations
 {
     [DbContext(typeof(QuizAppDBContext))]
-    partial class QuizAppDBContextModelSnapshot : ModelSnapshot
+    [Migration("20251101144951_AddIsMainPropertyForCategory")]
+    partial class AddIsMainPropertyForCategory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -159,62 +162,6 @@ namespace QuizApi.Migrations
                     b.HasKey("UserTokenId");
 
                     b.ToTable("UserToken");
-                });
-
-            modelBuilder.Entity("QuizApi.Models.Identity.FcmTokenModel", b =>
-                {
-                    b.Property<string>("FcmTokenId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("CreatedTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("DeletedTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Device")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ModifiedBy")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("ModifiedTime")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("RecordStatus")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Token")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("FcmTokenId");
-
-                    b.ToTable("FcmToken");
                 });
 
             modelBuilder.Entity("QuizApi.Models.Identity.RoleModel", b =>

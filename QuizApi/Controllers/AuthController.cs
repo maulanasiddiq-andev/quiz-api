@@ -161,6 +161,12 @@ namespace QuizApi.Controllers
                 TokenDto tokenDto = await _authRepository.GenerateAndSaveLoginToken(user, userAgent);
                 await _authRepository.UpdateLastLoginTimeAsync(user);
 
+                // create fcm token for push notification
+                if (!string.IsNullOrWhiteSpace(loginDto.FcmToken))
+                {
+                    await _authRepository.CreateFcmTokenAsync(loginDto.FcmToken, loginDto.Device, user.UserId);
+                }
+
                 return new BaseResponse(true, "Login Berhasil", tokenDto);
             }
             catch (KnownException ex)
@@ -220,6 +226,13 @@ namespace QuizApi.Controllers
                 TokenDto tokenDto = await _authRepository.GenerateAndSaveLoginToken(user, userAgent);
 
                 await _authRepository.UpdateLastLoginTimeAsync(user);
+
+                // create fcm token for push notification
+                if (!string.IsNullOrWhiteSpace(loginWithGoogleDto.FcmToken))
+                {
+                    await _authRepository.CreateFcmTokenAsync(loginWithGoogleDto.FcmToken, loginWithGoogleDto.Device, user.UserId);
+                }
+                
                 return new BaseResponse(true, "", tokenDto);
             }
             catch (Exception ex)
@@ -247,6 +260,29 @@ namespace QuizApi.Controllers
                 _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ex.Message, null);
+            }
+            catch (Exception ex)
+            {
+                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
+        [HttpPost]
+        [Route("logout")]
+        [Authorize]
+        [TokenValidation]
+        public async Task<BaseResponse> LogoutAsync([FromBody] LogoutDto? logout)
+        {
+            try
+            {
+                if (logout != null)
+                {
+                    await _authRepository.LogoutAsync(logout);
+                }
+
+                return new BaseResponse(true, "Berhasil Logout", null);
             }
             catch (Exception ex)
             {

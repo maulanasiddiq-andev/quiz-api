@@ -97,6 +97,9 @@ builder.Services.Configure<GoogleSetting>(builder.Configuration.GetSection("Goog
 
 builder.Services.Configure<JWTSetting>(builder.Configuration.GetSection("JwtSetting"));
 
+// for push notification settings
+builder.Services.Configure<PushNotificationSetting>(builder.Configuration.GetSection("PushNotificationSetting"));
+
 builder.Services.AddMemoryCache();
 
 var quizAppConnectionString = builder.Configuration.GetConnectionString("QuizAppPostgreSQL");

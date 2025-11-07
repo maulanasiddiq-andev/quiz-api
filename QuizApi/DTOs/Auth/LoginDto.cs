@@ -10,6 +10,8 @@ namespace QuizApi.DTOs.Auth
     {
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
+        public string? FcmToken { get; set; }
+        public string? Device { get; set; }
     }
 
     public class LoginValidator : AbstractValidator<LoginDto>

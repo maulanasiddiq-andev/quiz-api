@@ -7,5 +7,6 @@ namespace QuizApi.Models.Quiz
         [Key]
         public string CategoryId { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
+        public bool IsMain { get; set; }
     }
 }

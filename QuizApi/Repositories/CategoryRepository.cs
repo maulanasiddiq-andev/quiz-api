@@ -97,6 +97,17 @@ namespace QuizApi.Repositories
         {
             CategoryModel category = mapper.Map<CategoryModel>(categoryDto);
 
+            // check if category is not default
+            if (category.IsMain == false)
+            {
+                // if there is not any default category
+                // throw
+                if (await dBContext.Category.AnyAsync(x => x.IsMain == true) == false)
+                {
+                    throw new KnownException("Pilih satu kategori sebagai kategori default");
+                }
+            }
+
             actionModelHelper.AssignCreateModel(category, tableName, userId);
 
             await dBContext.AddAsync(category);
@@ -114,6 +125,29 @@ namespace QuizApi.Repositories
 
             category.Name = categoryDto.Name;
             category.Description = categoryDto.Description ?? "";
+            category.IsMain = categoryDto.IsMain;
+
+            // if the updated role is changed to main, change other roles to IsMain = false
+            if (category.IsMain)
+            {
+                List<CategoryModel> roles = await dBContext.Category.Where(x => x.CategoryId != id).ToListAsync();
+
+                foreach (var item in roles)
+                {
+                    item.IsMain = false;
+                }
+
+                dBContext.UpdateRange(roles);
+            }
+            else
+            {
+                // if there is not any default category
+                // throw
+                if (await dBContext.Category.AnyAsync(x => x.IsMain == true) == false)
+                {
+                    throw new KnownException("Pilih satu kategori sebagai kategori default");
+                }
+            }
 
             actionModelHelper.AssignUpdateModel(category, userId);
             dBContext.Update(category);
@@ -129,6 +163,16 @@ namespace QuizApi.Repositories
             if (category is null)
             {
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            if (category.IsMain == false)
+            {
+                // if there is not any default category
+                // throw
+                if (await dBContext.Category.AnyAsync(x => x.IsMain == true) == false)
+                {
+                    throw new KnownException("Pilih satu kategori sebagai kategori default");
+                }
             }
 
             actionModelHelper.AssignDeleteModel(category, userId);
