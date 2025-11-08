@@ -251,7 +251,6 @@ namespace QuizApi.Repositories
             quizHistory.QuizId = quizId;
             quizHistory.QuizVersion = checkQuizDto.QuizVersion;
             quizHistory.UserId = userId;
-            quizHistory.Description = "";
             actionModelHelper.AssignCreateModel(quizHistory, "QuizHistory", userId);
 
             // check every question from the quiz
@@ -296,6 +295,7 @@ namespace QuizApi.Repositories
                 question.Answers = question.Answers.OrderBy(x => x.AnswerOrder).ToList();
             }
 
+            // quiz history metadata
             quizHistory.Questions = quizHistory.Questions.OrderBy(x => x.QuestionOrder).ToList();
             quizHistory.QuizVersion = checkQuizDto.QuizVersion;
             quizHistory.Duration = checkQuizDto.Duration;

@@ -15,6 +15,9 @@ namespace QuizApi.Models.QuizHistory
         public string QuizHistoryId { get; set; } = string.Empty;
         public string QuizId { get; set; } = string.Empty;
         public QuizModel? Quiz { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string? ImageUrl { get; set; }
+        public int Time { get; set; }
         public uint QuizVersion { get; set; }
         public string UserId { get; set; } = string.Empty;
         public UserModel? User { get; set; }
