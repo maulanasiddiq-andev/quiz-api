@@ -167,7 +167,9 @@ namespace QuizApi.Controllers
         {
             try
             {
-                return new BaseResponse(true, "Role berhasil diupdate", null);
+                await roleRepository.DeleteDataAsync(id);
+                
+                return new BaseResponse(true, "Role berhasil dihapus", null);
             }
             catch (KnownException ex)
             {
