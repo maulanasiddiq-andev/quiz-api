@@ -8,6 +8,7 @@ namespace QuizApi.DTOs.Identity
         public string Name { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
         public DateTime? EmailVerifiedTime { get; set; }
         public string? ProfileImage { get; set; }
         public string? CoverImage { get; set; }
@@ -17,12 +18,23 @@ namespace QuizApi.DTOs.Identity
         public RoleDto? Role { get; set; }
     }
 
-    public class UserValidator : AbstractValidator<UserDto>
+    public class UserAddValidator : AbstractValidator<UserDto>
     {
-        public UserValidator()
+        public UserAddValidator()
+        {
+            RuleFor(x => x.Email).NotEmpty().WithMessage("Email harus diisi");
+            RuleFor(x => x.Password).NotEmpty().WithMessage("Password harus diisi");
+            RuleFor(x => x.Name).NotEmpty().WithMessage("Nama harus diisi");
+        }
+    }
+
+    public class UserUpdateValidator : AbstractValidator<UserDto>
+    {
+        public UserUpdateValidator()
         {
             RuleFor(x => x.Email).NotEmpty().WithMessage("Email harus diisi");
             RuleFor(x => x.Name).NotEmpty().WithMessage("Nama harus diisi");
+            RuleFor(x => x.Version).NotNull().NotEmpty().WithMessage("Version harus diisi");
         }
     }
 }
