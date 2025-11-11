@@ -56,7 +56,7 @@ namespace QuizApi.Controllers
                     throw new KnownException(ErrorMessageConstant.MethodParameterNull);
                 }
 
-                var validator = new RoleValidator();
+                var validator = new RoleAddValidator();
                 var results = validator.Validate(roleDto);
                 if (!results.IsValid)
                 {
@@ -139,6 +139,19 @@ namespace QuizApi.Controllers
         {
             try
             {
+                if (roleWithModuleDto == null)
+                {
+                    throw new KnownException(ErrorMessageConstant.MethodParameterNull);
+                }
+
+                var validator = new RoleUpdateValidator();
+                var results = validator.Validate(roleWithModuleDto);
+                if (!results.IsValid)
+                {
+                    var messages = results.Errors.Select(x => x.ErrorMessage).ToList();
+                    return new BaseResponse(false, messages);
+                }
+
                 await roleRepository.UpdateDataAsync(id, roleWithModuleDto);
 
                 return new BaseResponse(true, "Role berhasil diupdate", null);
