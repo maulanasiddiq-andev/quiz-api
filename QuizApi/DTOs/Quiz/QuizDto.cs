@@ -41,4 +41,22 @@ namespace QuizApi.DTOs.Quiz
             });
         }
     }
+    
+    public class QuizEditValidator : AbstractValidator<QuizDto>
+    {
+        public QuizEditValidator()
+        {
+            RuleFor(x => x.Version).NotNull().NotEmpty().WithMessage("Kategori harus diisi");
+            RuleFor(x => x.CategoryId).NotEmpty().WithMessage("Kategori harus diisi");
+            RuleFor(x => x.Title).NotEmpty().WithMessage("Judul harus diisi");
+            RuleFor(x => x.Time)
+                .NotNull().WithMessage("Waktu tidak boleh kosong")
+                .Must(x => x > 0).WithMessage("Waktu tidak boleh kosong");
+
+            When(x => x.Questions is not null, () =>
+            {
+                RuleForEach(d => d.Questions).SetValidator(new QuestionValidator());
+            });
+        }
+    }
 }

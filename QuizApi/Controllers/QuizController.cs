@@ -10,6 +10,7 @@ using QuizApi.Extensions;
 using QuizApi.Repositories;
 using QuizApi.Responses;
 using QuizApi.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace QuizApi.Controllers
 {
@@ -113,9 +114,10 @@ namespace QuizApi.Controllers
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
         }
-        
-        [RoleModuleValidation(ModuleConstant.DetailQuiz)]
-        [HttpGet("{id}/take-quiz")]
+
+        // for updating
+        [RoleModuleValidation(ModuleConstant.DetailQuiz, ModuleConstant.EditQuiz)]
+        [HttpGet("{id}/with-questions")]
         public async Task<BaseResponse> GetQuizWithQuestionsByIdAsync([FromRoute] string id)
         {
             try
@@ -143,6 +145,48 @@ namespace QuizApi.Controllers
             }
         }
 
+        [RoleModuleValidation(ModuleConstant.EditQuiz)]
+        [HttpPut]
+        [Route("{id}")]
+        public async Task<BaseResponse> UpdateQuizByIdAsync([FromRoute] string? id, [FromBody] QuizDto? quizDto)
+        {
+            try
+            {
+                if (quizDto == null || id == null)
+                {
+                    throw new KnownException(ErrorMessageConstant.MethodParameterNull);
+                }
+
+                var validator = new QuizEditValidator();
+                var results = validator.Validate(quizDto);
+                if (!results.IsValid)
+                {
+                    var messages = results.Errors.Select(x => x.ErrorMessage).ToList();
+                    return new BaseResponse(false, messages);
+                }
+
+                var result = await quizRepository.UpdateDataByIdAsync(id, quizDto);
+
+                return new BaseResponse(true, "Kuis berhasil diupdate", result);
+            }
+            catch (KnownException ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ex.Message, null);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return new BaseResponse(false, ErrorMessageConstant.ItemAlreadyChanged, null);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
         [RoleModuleValidation(ModuleConstant.DeleteQuiz)]
         [HttpDelete]
         [Route("{id}")]
@@ -153,6 +197,35 @@ namespace QuizApi.Controllers
                 await quizRepository.DeleteDataAsync(id);
 
                 return new BaseResponse(true, "Kuis berhasil dihapus", null);
+            }
+            catch (KnownException ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ex.Message, null);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+        
+        [RoleModuleValidation(ModuleConstant.DetailQuiz)]
+        [HttpGet("{id}/take-quiz")]
+        public async Task<BaseResponse> TakeQuizByIdAsync([FromRoute] string id)
+        {
+            try
+            {
+                if (id is null)
+                {
+                    throw new KnownException(ErrorMessageConstant.MethodParameterNull);
+                }
+
+                var category = await quizRepository.TakeQuizByIdAsync(id);
+
+                return new BaseResponse(true, "", category);
             }
             catch (KnownException ex)
             {
