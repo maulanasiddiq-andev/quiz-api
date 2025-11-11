@@ -86,7 +86,7 @@ namespace QuizApi.Controllers
                     throw new KnownException(ErrorMessageConstant.MethodParameterNull);
                 }
 
-                var validator = new UserValidator();
+                var validator = new UserUpdateValidator();
                 var results = validator.Validate(user);
                 if (!results.IsValid)
                 {

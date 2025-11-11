@@ -12,6 +12,9 @@ namespace QuizApi.DTOs.QuizHistory
         public string QuizHistoryId { get; set; } = string.Empty;
         public string QuizId { get; set; } = string.Empty;
         public QuizDto? Quiz { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string? ImageUrl { get; set; }
+        public int Time { get; set; }
         public uint QuizVersion { get; set; }
         public string UserId { get; set; } = string.Empty;
         public UserDto? User { get; set; }

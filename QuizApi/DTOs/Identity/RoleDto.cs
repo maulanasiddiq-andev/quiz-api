@@ -15,9 +15,9 @@ namespace QuizApi.DTOs.Identity
         public List<RoleModuleDto> RoleModules { get; set; }
     }
 
-    public class RoleValidator : AbstractValidator<RoleDto>
+    public class RoleAddValidator : AbstractValidator<RoleDto>
     {
-        public RoleValidator()
+        public RoleAddValidator()
         {
             RuleFor(x => x.Name).NotEmpty().WithMessage("Nama role tidak boleh kosong");
         }

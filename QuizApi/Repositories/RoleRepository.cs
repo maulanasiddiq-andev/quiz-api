@@ -43,7 +43,7 @@ namespace QuizApi.Repositories
         public async Task<SearchResponse> SearchDatasAsync(SearchRequestDto searchRequest)
         {
             IQueryable<RoleModel> listRoleQuery = dBContext.Role
-                .Where(x => x.RecordStatus.ToLower().Equals(RecordStatusConstant.Active.ToLower()))
+                .Where(x => x.RecordStatus == RecordStatusConstant.Active)
                 .AsQueryable();
 
             #region Query

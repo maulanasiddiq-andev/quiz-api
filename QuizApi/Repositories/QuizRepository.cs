@@ -181,11 +181,11 @@ namespace QuizApi.Repositories
             return quiz;
         }
 
-        public async Task<TakeQuizDto> GetQuizWithQuestionsByIdAsync(string quizId)
+        public async Task<TakeQuizDto> TakeQuizByIdAsync(string quizId)
         {
             QuizModel? quiz = await dBContext.Quiz
                 .Where(x => x.QuizId == quizId && x.RecordStatus == RecordStatusConstant.Active)
-                .Include(x => x.Questions.OrderBy(y => y.QuestionOrder)).ThenInclude(y => y.Answers)
+                .Select(MapQuizWithQuestions)
                 .FirstOrDefaultAsync();
 
             if (quiz == null)
@@ -210,6 +210,152 @@ namespace QuizApi.Repositories
             quizDto.QuestionCount = quizDto.Questions.Count();
 
             return quizDto;
+        }
+        
+        public async Task<QuizDto> GetQuizWithQuestionsByIdAsync(string quizId)
+        {            
+            QuizModel? quiz = await dBContext.Quiz
+                .Where(x => x.QuizId == quizId && x.RecordStatus == RecordStatusConstant.Active)
+                .Select(MapQuizWithQuestions)
+                .FirstOrDefaultAsync();
+
+            if (quiz == null)
+            {
+                throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            QuizDto quizDto = mapper.Map<QuizDto>(quiz);
+
+            return quizDto;
+        }
+
+        public async Task<QuizDto> UpdateDataByIdAsync(string id, QuizDto quizDto)
+        {
+            QuizModel? quiz = await dBContext.Quiz
+                .Where(x => x.QuizId == id && x.RecordStatus == RecordStatusConstant.Active)
+                .Select(MapQuizWithQuestions)
+                .FirstOrDefaultAsync();
+
+            if (quiz == null)
+            {
+                throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            if (quiz.UserId != userId)
+            {
+                throw new KnownException(ErrorMessageConstant.AccessNotAllowed);
+            }
+
+            // update the quiz
+            quiz.CategoryId = quizDto.CategoryId;
+            quiz.Title = quizDto.Title;
+            quiz.ImageUrl = quizDto.ImageUrl;
+            quiz.Time = quizDto.Time ?? 0; // Time is nullable in dto
+
+            actionModelHelper.AssignUpdateModel(quiz, userId);
+
+            // update the questions
+            foreach (var questionDto in quizDto.Questions)
+            {
+                // find the question that is about to be updated
+                QuestionModel? question = quiz.Questions.Where(q => q.QuestionId == questionDto.QuestionId).FirstOrDefault();
+
+                // if question is found, update
+                if (question != null)
+                {
+                    question.Text = questionDto.Text;
+                    question.ImageUrl = questionDto.ImageUrl;
+                    question.QuestionOrder = questionDto.QuestionOrder;
+
+                    actionModelHelper.AssignUpdateModel(question, userId);
+
+                    // update the answers
+                    foreach (var answerDto in questionDto.Answers)
+                    {
+                        // find the answer that is about to be updated
+                        AnswerModel? answer = question.Answers.Where(a => a.AnswerId == answerDto.AnswerId).FirstOrDefault();
+
+                        // if the answer is found, update
+                        if (answer != null)
+                        {
+                            answer.Text = answerDto.Text;
+                            answer.AnswerOrder = answerDto.AnswerOrder;
+                            answer.ImageUrl = answerDto.ImageUrl;
+                            answer.IsTrueAnswer = answerDto.IsTrueAnswer;
+
+                            actionModelHelper.AssignUpdateModel(answer, userId);
+                        }
+                        // if the answer is not found
+                        // answerDto is a new answer, add
+                        else
+                        {
+                            AnswerModel newAnswer = mapper.Map<AnswerModel>(answerDto);
+                            newAnswer.QuestionId = question.QuestionId;
+
+                            actionModelHelper.AssignCreateModel(newAnswer, "Answer", userId);
+
+                            // insert to question
+                            // this action is prevented by concurrecy
+                            // question.Answers.Add(newAnswer);
+
+                            // add
+                            await dBContext.AddAsync(newAnswer);
+                        }
+                    }
+
+                    // check old answers that dont exist in questionDto
+                    foreach (var answer in question.Answers)
+                    {
+                        AnswerDto? answerDto = questionDto.Answers.Where(x => x.AnswerId == answer.AnswerId).FirstOrDefault();
+
+                        // if answer is not found in questionDto
+                        // delete
+                        if (answerDto == null)
+                        {
+                            actionModelHelper.AssignDeleteModel(answer, userId);
+                        }
+                    }
+                }
+                // if the question is not found
+                // add
+                else
+                {
+                    QuestionModel newQuestion = mapper.Map<QuestionModel>(questionDto);
+                    newQuestion.QuizId = quiz.QuizId;
+
+                    actionModelHelper.AssignCreateModel(newQuestion, "Question", userId);
+
+                    // create the answers
+                    foreach (var answer in newQuestion.Answers)
+                    {
+                        answer.QuestionId = newQuestion.QuestionId;
+                        actionModelHelper.AssignCreateModel(answer, "Answer", userId);
+                    }
+
+                    // insert to quiz
+                    // quiz.Questions.Add(newQuestion);
+
+                    await dBContext.AddAsync(newQuestion);
+                }
+            }
+
+            // check old questions that dont exist in quizDto
+            foreach (var question in quiz.Questions)
+            {
+                QuestionDto? questionDto = quizDto.Questions.Where(q => q.QuestionId == question.QuestionId).FirstOrDefault();
+
+                // if old question is not found in quizDto
+                // delete
+                if (questionDto == null)
+                {
+                    actionModelHelper.AssignDeleteModel(question, userId);
+                }
+            }
+
+            dBContext.Update(quiz);
+            await dBContext.SaveChangesAsync();
+
+            return mapper.Map<QuizDto>(quiz);
         }
 
         public async Task DeleteDataAsync(string id)
@@ -237,7 +383,7 @@ namespace QuizApi.Repositories
         {
             QuizModel? quiz = await dBContext.Quiz
                 .Where(x => x.QuizId == quizId && x.RecordStatus == RecordStatusConstant.Active)
-                .Include(x => x.Questions).ThenInclude(y => y.Answers)
+                .Select(MapQuizWithQuestions)
                 .FirstOrDefaultAsync();
 
             if (quiz == null)
@@ -251,7 +397,6 @@ namespace QuizApi.Repositories
             quizHistory.QuizId = quizId;
             quizHistory.QuizVersion = checkQuizDto.QuizVersion;
             quizHistory.UserId = userId;
-            quizHistory.Description = "";
             actionModelHelper.AssignCreateModel(quizHistory, "QuizHistory", userId);
 
             // check every question from the quiz
@@ -296,6 +441,7 @@ namespace QuizApi.Repositories
                 question.Answers = question.Answers.OrderBy(x => x.AnswerOrder).ToList();
             }
 
+            // quiz history metadata
             quizHistory.Questions = quizHistory.Questions.OrderBy(x => x.QuestionOrder).ToList();
             quizHistory.QuizVersion = checkQuizDto.QuizVersion;
             quizHistory.Duration = checkQuizDto.Duration;
@@ -381,5 +527,57 @@ namespace QuizApi.Repositories
 
             return response;
         }
+
+        private Expression<Func<QuizModel, QuizModel>> MapQuizWithQuestions = quiz => new QuizModel
+        {
+            QuizId = quiz.QuizId,
+            Title = quiz.Title,
+            Description = quiz.Description,
+            ImageUrl = quiz.ImageUrl,
+            CategoryId = quiz.CategoryId,
+            Time = quiz.Time,
+            UserId = quiz.UserId,
+            CreatedBy = quiz.CreatedBy,
+            CreatedTime = quiz.CreatedTime,
+            ModifiedBy = quiz.ModifiedBy,
+            ModifiedTime = quiz.ModifiedTime,
+            Version = quiz.Version,
+            RecordStatus = quiz.RecordStatus,
+            Questions = quiz.Questions
+                .Where(q => q.RecordStatus == RecordStatusConstant.Active)
+                .OrderBy(q => q.QuestionOrder)
+                .Select(q => new QuestionModel
+                {
+                    QuestionId = q.QuestionId,
+                    QuizId = q.QuizId,
+                    Text = q.Text,
+                    ImageUrl = q.ImageUrl,
+                    QuestionOrder = q.QuestionOrder,
+                    CreatedBy = q.CreatedBy,
+                    CreatedTime = q.CreatedTime,
+                    ModifiedBy = q.ModifiedBy,
+                    ModifiedTime = q.ModifiedTime,
+                    Version = q.Version,
+                    RecordStatus = q.RecordStatus,
+                    Answers = q.Answers
+                        .Where(a => a.RecordStatus == RecordStatusConstant.Active)
+                        .OrderBy(a => a.AnswerOrder)
+                        .Select(a => new AnswerModel
+                        {
+                            AnswerId = a.AnswerId,
+                            QuestionId = a.QuestionId,
+                            Text = a.Text,
+                            ImageUrl = a.ImageUrl,
+                            AnswerOrder = a.AnswerOrder,
+                            IsTrueAnswer = a.IsTrueAnswer,
+                            CreatedBy = a.CreatedBy,
+                            CreatedTime = a.CreatedTime,
+                            ModifiedBy = a.ModifiedBy,
+                            ModifiedTime = a.ModifiedTime,
+                            Version = a.Version,
+                            RecordStatus = a.RecordStatus
+                        }).ToList()
+                }).ToList(),
+        };
     }
 }

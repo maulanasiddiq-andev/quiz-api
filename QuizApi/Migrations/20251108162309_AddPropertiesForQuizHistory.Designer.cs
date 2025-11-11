@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using QuizApi.Models;
@@ -11,9 +12,11 @@ using QuizApi.Models;
 namespace QuizApi.Migrations
 {
     [DbContext(typeof(QuizAppDBContext))]
-    partial class QuizAppDBContextModelSnapshot : ModelSnapshot
+    [Migration("20251108162309_AddPropertiesForQuizHistory")]
+    partial class AddPropertiesForQuizHistory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -441,6 +444,9 @@ namespace QuizApi.Migrations
                     b.Property<string>("QuestionId")
                         .HasColumnType("text");
 
+                    b.Property<string>("QuestionModelQuestionId")
+                        .HasColumnType("text");
+
                     b.Property<string>("RecordStatus")
                         .IsRequired()
                         .HasColumnType("text");
@@ -456,7 +462,7 @@ namespace QuizApi.Migrations
 
                     b.HasKey("AnswerId");
 
-                    b.HasIndex("QuestionId");
+                    b.HasIndex("QuestionModelQuestionId");
 
                     b.ToTable("Answer");
                 });
@@ -550,6 +556,9 @@ namespace QuizApi.Migrations
                     b.Property<string>("QuizId")
                         .HasColumnType("text");
 
+                    b.Property<string>("QuizModelQuizId")
+                        .HasColumnType("text");
+
                     b.Property<string>("RecordStatus")
                         .IsRequired()
                         .HasColumnType("text");
@@ -566,7 +575,7 @@ namespace QuizApi.Migrations
 
                     b.HasKey("QuestionId");
 
-                    b.HasIndex("QuizId");
+                    b.HasIndex("QuizModelQuizId");
 
                     b.ToTable("Question");
                 });
@@ -802,20 +811,16 @@ namespace QuizApi.Migrations
 
             modelBuilder.Entity("QuizApi.Models.Quiz.AnswerModel", b =>
                 {
-                    b.HasOne("QuizApi.Models.Quiz.QuestionModel", "Question")
+                    b.HasOne("QuizApi.Models.Quiz.QuestionModel", null)
                         .WithMany("Answers")
-                        .HasForeignKey("QuestionId");
-
-                    b.Navigation("Question");
+                        .HasForeignKey("QuestionModelQuestionId");
                 });
 
             modelBuilder.Entity("QuizApi.Models.Quiz.QuestionModel", b =>
                 {
-                    b.HasOne("QuizApi.Models.Quiz.QuizModel", "Quiz")
+                    b.HasOne("QuizApi.Models.Quiz.QuizModel", null)
                         .WithMany("Questions")
-                        .HasForeignKey("QuizId");
-
-                    b.Navigation("Quiz");
+                        .HasForeignKey("QuizModelQuizId");
                 });
 
             modelBuilder.Entity("QuizApi.Models.Quiz.QuizModel", b =>
