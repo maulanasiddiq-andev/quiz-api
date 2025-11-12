@@ -27,16 +27,20 @@ namespace QuizApi.Repositories
         private readonly string userId = "";
         private readonly ActionModelHelper actionModelHelper;
         private readonly PushNotificationService pushNotificationService;
+        // for updating quiz
+        private readonly CategoryRepository categoryRepository;
         public QuizRepository(
             QuizAppDBContext dBContext,
             IMapper mapper,
             IHttpContextAccessor httpContextAccessor,
-            PushNotificationService pushNotificationService
+            PushNotificationService pushNotificationService,
+            CategoryRepository categoryRepository
         )
         {
             this.dBContext = dBContext;
             this.mapper = mapper;
             this.pushNotificationService = pushNotificationService;
+            this.categoryRepository = categoryRepository;
             actionModelHelper = new ActionModelHelper();
 
             if (httpContextAccessor != null)
@@ -65,7 +69,7 @@ namespace QuizApi.Repositories
                     ModifiedTime = x.ModifiedTime,
                     Version = x.Version,
                     RecordStatus = x.RecordStatus,
-                    QuestionCount = x.Questions.Count(),
+                    QuestionCount = x.Questions.Where(q => q.RecordStatus == RecordStatusConstant.Active).Count(),
                     HistoriesCount = x.Histories.Count(),
                     // check if the current user has taken the quiz
                     IsTakenByUser = x.Histories.Any(y => y.UserId == userId)
@@ -166,7 +170,7 @@ namespace QuizApi.Repositories
                     ModifiedTime = x.ModifiedTime,
                     Version = x.Version,
                     RecordStatus = x.RecordStatus,
-                    QuestionCount = x.Questions.Count(),
+                    QuestionCount = x.Questions.Where(q => q.RecordStatus == RecordStatusConstant.Active).Count(),
                     HistoriesCount = x.Histories.Count(),
                     // check if the current user has taken the quiz
                     IsTakenByUser = x.Histories.Any(y => y.UserId == userId)
@@ -225,6 +229,12 @@ namespace QuizApi.Repositories
             }
 
             QuizDto quizDto = mapper.Map<QuizDto>(quiz);
+
+            // get category for showing it in edit page
+            if (quizDto.CategoryId != null)
+            {
+                quizDto.Category = await categoryRepository.GetDataByIdAsync(quizDto.CategoryId);
+            }
 
             return quizDto;
         }
