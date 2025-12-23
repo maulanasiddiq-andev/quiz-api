@@ -31,7 +31,7 @@ namespace QuizApi.Services
 
                 DateTime dateNow = DateTime.UtcNow;
 
-                UserTokenModel? userTokenInMemory = _cacheService.GetData<UserTokenModel>(MemoryCacheConstant.UserTokenKey);
+                UserTokenModel? userTokenInMemory = await _cacheService.GetDataAsync<UserTokenModel>(MemoryCacheConstant.UserTokenKey);
                 UserTokenModel? userTokenLogin = null;
 
                 if (userTokenInMemory is not null)
@@ -63,7 +63,7 @@ namespace QuizApi.Services
                     {
                         userTokenLogin = userTokenInDB;
 
-                        _cacheService.SetData(MemoryCacheConstant.UserTokenKey, userTokenLogin, TimeSpan.FromMinutes(50));
+                        await _cacheService.SetDataAsync(MemoryCacheConstant.UserTokenKey, userTokenLogin, TimeSpan.FromMinutes(50));
                     }
                 }
 

@@ -116,6 +116,13 @@ builder.Services.AddDbContext<ActivityLogDBContext>(options =>
     options.UseNpgsql(activityLogConnectionString);
 });
 
+// redis connection string can not contain space and semicolon
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = redisConnectionString;
+});
+
 builder.Services.RegisterRepositories();
 
 // for swagger

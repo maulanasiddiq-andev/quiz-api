@@ -1,4 +1,5 @@
-using Microsoft.Extensions.Caching.Memory;
+using System.Text.Json;
+using Microsoft.Extensions.Caching.Distributed;
 using QuizApi.Constants;
 using QuizApi.Extensions;
 
@@ -6,16 +7,16 @@ namespace QuizApi.Services
 {
     public class CacheService
     {
-        private readonly IMemoryCache _memoryCache;
+        private readonly IDistributedCache cache;
         private readonly ActivityLogService activityLogService;
         private readonly string userId = "";
         public CacheService(
-            IMemoryCache memoryCache,
+            IDistributedCache cache,
             IHttpContextAccessor httpContextAccessor,
             ActivityLogService activityLogService
         )
         {
-            _memoryCache = memoryCache;
+            this.cache = cache;
             this.activityLogService = activityLogService;
 
             if (httpContextAccessor != null)
@@ -24,47 +25,49 @@ namespace QuizApi.Services
             }
         }
 
-        public T? GetData<T>(string key)
+        public async Task<T?> GetDataAsync<T>(string key)
         {
             try
             {
-                if (_memoryCache.TryGetValue(key, out T? value))
-                {
-                    return value;
-                }
+                var data = await cache.GetStringAsync(key);
+                if (data == null)
+                    return default;
+
+                return JsonSerializer.Deserialize<T>(data);
             }
             catch (Exception ex)
             {
                 activityLogService.SaveErrorLog(ex, "GetData", userId, key);
+                return default;
             }
-
-            return default;
         }
 
-        public bool SetData<T>(string key, T value, TimeSpan expirationTime)
+        public async Task<bool> SetDataAsync<T>(string key, T value, TimeSpan expirationTime)
         {
             try
             {
-                var cacheEntryOptions = new MemoryCacheEntryOptions
+                var options = new DistributedCacheEntryOptions
                 {
                     AbsoluteExpirationRelativeToNow = expirationTime
                 };
 
-                _memoryCache.Set(key, value, cacheEntryOptions);
+                var json = JsonSerializer.Serialize(value);
+                await cache.SetStringAsync(key, json, options);
+
                 return true;
             }
             catch (Exception ex)
             {
                 activityLogService.SaveErrorLog(ex, "SetData", userId, key);
+                return false;
             }
-            return false;
         }
 
-        public void RemoveData(string key)
+        public async Task RemoveDataAsync(string key)
         {
             try
             {
-                _memoryCache.Remove(key);
+                await cache.RemoveAsync(key);
             }
             catch (Exception ex)
             {
@@ -72,26 +75,26 @@ namespace QuizApi.Services
             }
         }
 
-        public void RemoveUserRelatedCache(string userId)
+        public async Task RemoveUserRelatedCache(string userId)
         {
             try
             {
-                RemoveData(MemoryCacheConstant.UserTokenKey + userId);
-                RemoveData(MemoryCacheConstant.RoleModuleKey + userId);
-                RemoveData(MemoryCacheConstant.UserKey + userId);
+                await RemoveDataAsync(MemoryCacheConstant.UserTokenKey + userId);
+                await RemoveDataAsync(MemoryCacheConstant.RoleModuleKey + userId);
+                await RemoveDataAsync(MemoryCacheConstant.UserKey + userId);
             }
             catch { }
         }
         
-        public void RemoveUserRelatedCache(List<string> usersId)
+        public async Task RemoveUserRelatedCache(List<string> usersId)
         {
             try
             {
                 foreach (var userId in usersId)
                 {
-                    RemoveData(MemoryCacheConstant.UserTokenKey + userId);
-                    RemoveData(MemoryCacheConstant.RoleModuleKey + userId);
-                    RemoveData(MemoryCacheConstant.UserKey + userId);
+                    await RemoveDataAsync(MemoryCacheConstant.UserTokenKey + userId);
+                    await RemoveDataAsync(MemoryCacheConstant.RoleModuleKey + userId);
+                    await RemoveDataAsync(MemoryCacheConstant.UserKey + userId);
                 }
             }
             catch { }
