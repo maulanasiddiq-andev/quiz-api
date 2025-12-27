@@ -26,7 +26,6 @@ namespace QuizApi.Repositories
         private readonly IMapper mapper;
         private readonly RoleRepository roleRepository;
         private readonly UserRepository userRepository;
-        private readonly EmailService emailService;
         private readonly string userId = "";
         private readonly ActionModelHelper actionModelHelper;
         private readonly QueueService queueService;
@@ -37,7 +36,6 @@ namespace QuizApi.Repositories
             IHttpContextAccessor httpContextAccessor,
             IMapper mapper,
             RoleRepository roleRepository,
-            EmailService emailService,
             UserRepository userRepository,
             QueueService queueService
         )
@@ -45,7 +43,6 @@ namespace QuizApi.Repositories
             this.dBContext = dBContext;
             this.mapper = mapper;
             this.roleRepository = roleRepository;
-            this.emailService = emailService;
             this.queueService = queueService;
             this.userRepository = userRepository;
             jwtSetting = jwtOptions.Value;
@@ -105,12 +102,6 @@ namespace QuizApi.Repositories
 
             await dBContext.AddAsync(otp);
             await dBContext.SaveChangesAsync();
-
-            // await emailService.SendEmailAsync(
-            //     user.Name,
-            //     user.Email,
-            //     $"Kode OTP Anda adalah {otpCode}"
-            // );
 
             var email = new EmailQueue
             {

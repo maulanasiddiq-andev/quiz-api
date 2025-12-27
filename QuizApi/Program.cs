@@ -91,8 +91,6 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 
 builder.Services.AddHttpContextAccessor();
 
-builder.Services.Configure<EmailSetting>(builder.Configuration.GetSection("EmailSetting"));
-
 builder.Services.Configure<GoogleSetting>(builder.Configuration.GetSection("GoogleSetting"));
 
 builder.Services.Configure<JWTSetting>(builder.Configuration.GetSection("JwtSetting"));
