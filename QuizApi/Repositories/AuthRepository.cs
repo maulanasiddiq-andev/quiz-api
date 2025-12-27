@@ -11,6 +11,7 @@ using QuizApi.Helpers;
 using QuizApi.Models;
 using QuizApi.Models.Auth;
 using QuizApi.Models.Identity;
+using QuizApi.Queue;
 using QuizApi.Services;
 using QuizApi.Settings;
 
@@ -28,6 +29,7 @@ namespace QuizApi.Repositories
         private readonly EmailService emailService;
         private readonly string userId = "";
         private readonly ActionModelHelper actionModelHelper;
+        private readonly QueueService queueService;
         public AuthRepository(
             QuizAppDBContext dBContext,
             IOptions<JWTSetting> jwtOptions,
@@ -36,13 +38,15 @@ namespace QuizApi.Repositories
             IMapper mapper,
             RoleRepository roleRepository,
             EmailService emailService,
-            UserRepository userRepository
+            UserRepository userRepository,
+            QueueService queueService
         )
         {
             this.dBContext = dBContext;
             this.mapper = mapper;
             this.roleRepository = roleRepository;
             this.emailService = emailService;
+            this.queueService = queueService;
             this.userRepository = userRepository;
             jwtSetting = jwtOptions.Value;
             googleSetting = googleOptions.Value;
@@ -102,11 +106,19 @@ namespace QuizApi.Repositories
             await dBContext.AddAsync(otp);
             await dBContext.SaveChangesAsync();
 
-            await emailService.SendEmailAsync(
-                user.Name,
-                user.Email,
-                $"Kode OTP Anda adalah {otpCode}"
-            );
+            // await emailService.SendEmailAsync(
+            //     user.Name,
+            //     user.Email,
+            //     $"Kode OTP Anda adalah {otpCode}"
+            // );
+
+            var email = new EmailQueue
+            {
+                Email = user.Email,
+                Name = user.Name,
+                Text = $"Kode OTP Anda adalah {otpCode}"
+            };
+            await queueService.Publish(QueueConstant.EmailQueue, email);
         }
 
         public async Task CheckOtpValidationAsync(CheckOtpDto checkOtpDto)

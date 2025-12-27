@@ -1,5 +1,6 @@
 using QuizApi.Repositories;
 using QuizApi.Services;
+using RabbitMQ.Client;
 
 namespace QuizApi.Extensions
 {
@@ -22,6 +23,18 @@ namespace QuizApi.Extensions
             collection.AddScoped<RoleModuleValidationService>();
             collection.AddScoped<EmailService>();
             collection.AddScoped<PushNotificationService>();
+
+            // queue service
+            collection.AddSingleton(sp =>
+            {
+               return new ConnectionFactory
+               {
+                    HostName = "localhost",
+                    UserName = "guest",
+                    Password = "guest"
+               }.CreateConnectionAsync().GetAwaiter().GetResult();
+            });
+            collection.AddSingleton<QueueService>();
         }
     }
 }
