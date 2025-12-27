@@ -18,7 +18,7 @@ namespace QuizApi.Repositories
         private readonly IMapper mapper;
         private readonly ActionModelHelper actionModelHelper;
         private readonly string userId = "";
-        private readonly string tableName = "User";
+        // private readonly string tableName = "User";
         public UserRepository(
             QuizAppDBContext dBContext,
             IMapper mapper,

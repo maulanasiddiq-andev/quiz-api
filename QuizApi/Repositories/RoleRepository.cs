@@ -260,7 +260,7 @@ namespace QuizApi.Repositories
                 .Select(x => x.UserId)
                 .ToListAsync();
 
-            cacheService.RemoveUserRelatedCache(userIds);
+            await cacheService.RemoveUserRelatedCache(userIds);
             #endregion
 
             await dBContext.SaveChangesAsync();
