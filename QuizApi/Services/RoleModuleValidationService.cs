@@ -37,7 +37,7 @@ namespace QuizApi.Services
             {
                 // Prefer To Use memory DB First
                 // Remove memory DB when RoleModul Created or Modified
-                IEnumerable<RoleModuleModel>? roleModuleInCache = cacheService.GetData<IEnumerable<RoleModuleModel>>(MemoryCacheConstant.RoleModuleKey + userId);
+                IEnumerable<RoleModuleModel>? roleModuleInCache = await cacheService.GetDataAsync<IEnumerable<RoleModuleModel>>(MemoryCacheConstant.RoleModuleKey + userId);
 
                 if (roleModuleInCache != null)
                 {
@@ -79,7 +79,7 @@ namespace QuizApi.Services
 
                         // Don't Forget : Remove when role modul modified
                         // Don't Forget : Remove when user role modified
-                        cacheService.SetData(MemoryCacheConstant.RoleModuleKey + userId, roleModules, TimeSpan.FromHours(8));
+                        await cacheService.SetDataAsync(MemoryCacheConstant.RoleModuleKey + userId, roleModules, TimeSpan.FromHours(8));
                     }
                 }
 

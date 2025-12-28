@@ -91,8 +91,6 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 
 builder.Services.AddHttpContextAccessor();
 
-builder.Services.Configure<EmailSetting>(builder.Configuration.GetSection("EmailSetting"));
-
 builder.Services.Configure<GoogleSetting>(builder.Configuration.GetSection("GoogleSetting"));
 
 builder.Services.Configure<JWTSetting>(builder.Configuration.GetSection("JwtSetting"));
@@ -114,6 +112,13 @@ builder.Services.AddDbContext<ActivityLogDBContext>(options =>
 {
     options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
     options.UseNpgsql(activityLogConnectionString);
+});
+
+// redis connection string can not contain space and semicolon
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = redisConnectionString;
 });
 
 builder.Services.RegisterRepositories();
