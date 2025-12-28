@@ -90,6 +90,34 @@ namespace QuizApi.Repositories
             return mapper.Map<UserDto>(user);
         }
 
+        public async Task<UserDto> ChangeEmailAsync(UserDto userDto)
+        {
+            var user = await dBContext.User.Where(x => x.UserId == userDto.UserId).FirstOrDefaultAsync();
+
+            if (user == null)
+            {
+                throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            // check if the email already exists
+            var isValid = await IsValidToCreateUser(userDto.Email);
+            if (!isValid)
+            {
+                throw new KnownException("Email sudah dipakai");
+            }
+
+            // change the email and username, save, then send a new otp to the new email
+            user.Email = userDto.Email;
+            user.Username = userDto.Email.Split("@")[0];
+            
+            dBContext.Update(user);
+            await dBContext.SaveChangesAsync();
+
+            await SendOTPEmailAsync(user);
+
+            return mapper.Map<UserDto>(user);
+        }
+
         public async Task ResendOTPEmailAsync(UserModel user)
         {
             // check the otp for checking if new otp can be resent

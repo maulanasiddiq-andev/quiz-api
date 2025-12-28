@@ -73,6 +73,43 @@ namespace QuizApi.Controllers
         }
 
         [HttpPost]
+        [Route("change-email")]
+        public async Task<BaseResponse> ChangeEmailAsync([FromBody] UserDto userDto)
+        {
+            try
+            {
+                if (userDto is null)
+                {
+                    throw new KnownException(ErrorMessageConstant.MethodParameterNull);
+                }
+
+                var validator = new UserChangeEmailValidator();
+                var results = validator.Validate(userDto);
+                if (!results.IsValid)
+                {
+                    var messages = results.Errors.Select(error => error.ErrorMessage).ToList();
+                    return new BaseResponse(false, messages);
+                }
+
+                var result = await authRepository.ChangeEmailAsync(userDto);
+
+                return new BaseResponse(true, "Email berhasil diupdate", result);
+            }
+            catch (KnownException ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ex.Message, null);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
+        [HttpPost]
         [Route("otp")]
         public async Task<BaseResponse> CheckOtpValidationAsync([FromBody] CheckOtpDto checkOtpDto)
         {

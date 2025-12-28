@@ -18,6 +18,14 @@ namespace QuizApi.DTOs.Identity
         public RoleDto? Role { get; set; }
     }
 
+    public class UserChangeEmailValidator : AbstractValidator<UserDto>
+    {
+        public UserChangeEmailValidator()
+        {
+            RuleFor(x => x.Email).NotEmpty().WithMessage("Email harus diisi");
+        }
+    }
+
     public class UserAddValidator : AbstractValidator<UserDto>
     {
         public UserAddValidator()
