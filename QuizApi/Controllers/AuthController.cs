@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using QuizApi.Attributes;
 using QuizApi.Constants;
 using QuizApi.DTOs.Auth;
+using QuizApi.DTOs.Identity;
 using QuizApi.Exceptions;
 using QuizApi.Extensions;
 using QuizApi.Models.Auth;
@@ -18,18 +19,18 @@ namespace QuizApi.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
-        private readonly IMapper _mapper;
-        private readonly AuthRepository _authRepository;
-        private readonly ActivityLogService _activityLogService;
+        private readonly IMapper mapper;
+        private readonly AuthRepository authRepository;
+        private readonly ActivityLogService activityLogService;
         public AuthController(
             IMapper mapper,
             AuthRepository authRepository,
             ActivityLogService activityLogService
         )
         {
-            _mapper = mapper;
-            _authRepository = authRepository;
-            _activityLogService = activityLogService;
+            this.mapper = mapper;
+            this.authRepository = authRepository;
+            this.activityLogService = activityLogService;
         }
 
         [HttpPost]
@@ -51,21 +52,21 @@ namespace QuizApi.Controllers
                     return new BaseResponse(false, messages);
                 }
 
-                var user = _mapper.Map<UserModel>(registerDto);
+                var user = mapper.Map<UserModel>(registerDto);
 
-                await _authRepository.RegisterAsync(user, registerDto.Password);
+                var result = await authRepository.RegisterAsync(user, registerDto.Password);
 
-                return new BaseResponse(true, "Pendaftaran Berhasil", null);
+                return new BaseResponse(true, "Pendaftaran Berhasil", result);
             }
             catch (KnownException ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ex.Message, null);
             }
             catch (Exception ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
@@ -82,19 +83,19 @@ namespace QuizApi.Controllers
                     throw new KnownException(ErrorMessageConstant.MethodParameterNull);
                 }
 
-                await _authRepository.CheckOtpValidationAsync(checkOtpDto);
+                await authRepository.CheckOtpValidationAsync(checkOtpDto);
 
                 return new BaseResponse(true, "Kode OTP berhasil di verifikasi, silakan login", null);
             }
             catch (KnownException ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ex.Message, null);
             }
             catch (Exception ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
@@ -102,24 +103,24 @@ namespace QuizApi.Controllers
 
         [HttpPost]
         [Route("resend-otp")]
-        public async Task<BaseResponse> ResendOTPAsync([FromBody] RegisterDto registerDto)
+        public async Task<BaseResponse> ResendOTPAsync([FromBody] UserDto userDto)
         {
             try
             {
-                UserModel user = _mapper.Map<UserModel>(registerDto);
-                await _authRepository.SendOTPEmailAsync(user);
+                UserModel user = mapper.Map<UserModel>(userDto);
+                await authRepository.ResendOTPEmailAsync(user);
 
                 return new BaseResponse(true, "OTP baru sudah dikirim", null);
             }
             catch (KnownException ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ex.Message, null);
             }
             catch (Exception ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
@@ -144,13 +145,13 @@ namespace QuizApi.Controllers
                     return new BaseResponse(false, messages);
                 }
 
-                var user = await _authRepository.FindUserByEmailAsync(loginDto.Email);
+                var user = await authRepository.FindUserByEmailAsync(loginDto.Email);
                 if (user is null)
                 {
                     throw new KnownException(ErrorMessageConstant.InvalidLogin);
                 }
 
-                var isLoginValid = await _authRepository.IsLoginValidAsync(user, loginDto.Password);
+                var isLoginValid = await authRepository.IsLoginValidAsync(user, loginDto.Password);
                 if (!isLoginValid)
                 {
                     throw new KnownException(ErrorMessageConstant.InvalidLogin);
@@ -158,26 +159,26 @@ namespace QuizApi.Controllers
 
                 var userAgent = string.IsNullOrEmpty(Request.Headers["User-Agent"]) ? "" : Request.Headers["User-Agent"].ToString();
 
-                TokenDto tokenDto = await _authRepository.GenerateAndSaveLoginToken(user, userAgent);
-                await _authRepository.UpdateLastLoginTimeAsync(user);
+                TokenDto tokenDto = await authRepository.GenerateAndSaveLoginToken(user, userAgent);
+                await authRepository.UpdateLastLoginTimeAsync(user);
 
                 // create fcm token for push notification
                 if (!string.IsNullOrWhiteSpace(loginDto.FcmToken))
                 {
-                    await _authRepository.CreateFcmTokenAsync(loginDto.FcmToken, loginDto.Device, user.UserId);
+                    await authRepository.CreateFcmTokenAsync(loginDto.FcmToken, loginDto.Device, user.UserId);
                 }
 
                 return new BaseResponse(true, "Login Berhasil", tokenDto);
             }
             catch (KnownException ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ex.Message, null);
             }
             catch (Exception ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
@@ -195,19 +196,19 @@ namespace QuizApi.Controllers
                 }
 
                 var userAgent = string.IsNullOrEmpty(Request.Headers["User-Agent"]) ? "" : Request.Headers["User-Agent"].ToString();
-                TokenDto token = await _authRepository.RefreshTokenAsync(tokenDto, userAgent);
+                TokenDto token = await authRepository.RefreshTokenAsync(tokenDto, userAgent);
 
                 return new BaseResponse(true, "Login Berhasil", token);
             }
             catch (KnownException ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ex.Message, null);
             }
             catch (Exception ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
@@ -219,25 +220,25 @@ namespace QuizApi.Controllers
         {
             try
             {
-                var user = await _authRepository.LoginWithGoogleAsync(loginWithGoogleDto);
+                var user = await authRepository.LoginWithGoogleAsync(loginWithGoogleDto);
 
                 var userAgent = string.IsNullOrEmpty(Request.Headers["User-Agent"]) ? "" : Request.Headers["User-Agent"].ToString();
 
-                TokenDto tokenDto = await _authRepository.GenerateAndSaveLoginToken(user, userAgent);
+                TokenDto tokenDto = await authRepository.GenerateAndSaveLoginToken(user, userAgent);
 
-                await _authRepository.UpdateLastLoginTimeAsync(user);
+                await authRepository.UpdateLastLoginTimeAsync(user);
 
                 // create fcm token for push notification
                 if (!string.IsNullOrWhiteSpace(loginWithGoogleDto.FcmToken))
                 {
-                    await _authRepository.CreateFcmTokenAsync(loginWithGoogleDto.FcmToken, loginWithGoogleDto.Device, user.UserId);
+                    await authRepository.CreateFcmTokenAsync(loginWithGoogleDto.FcmToken, loginWithGoogleDto.Device, user.UserId);
                 }
                 
                 return new BaseResponse(true, "", tokenDto);
             }
             catch (Exception ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
@@ -251,19 +252,19 @@ namespace QuizApi.Controllers
         {
             try
             {
-                var user = await _authRepository.CheckAuthAsync();
+                var user = await authRepository.CheckAuthAsync();
 
                 return new BaseResponse(true, "", user);
             }
             catch (KnownException ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ex.Message, null);
             }
             catch (Exception ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
@@ -279,14 +280,14 @@ namespace QuizApi.Controllers
             {
                 if (logout != null)
                 {
-                    await _authRepository.LogoutAsync(logout);
+                    await authRepository.LogoutAsync(logout);
                 }
 
                 return new BaseResponse(true, "Berhasil Logout", null);
             }
             catch (Exception ex)
             {
-                _activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }

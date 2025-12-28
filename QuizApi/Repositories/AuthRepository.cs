@@ -56,13 +56,14 @@ namespace QuizApi.Repositories
             }
         }
 
-        public async Task RegisterAsync(UserModel user, string password)
+        public async Task<UserDto> RegisterAsync(UserModel user, string password)
         {
-            var userExists = await IsValidToCreateUser(user.Email, user.Username);
+            // check if the email submitted by the new user is already registered
+            var isValid = await IsValidToCreateUser(user.Email);
 
-            if (!userExists)
+            if (!isValid)
             {
-                throw new KnownException($"User dengan email {user.Email} atau username {user.Username} sudah ada");
+                throw new KnownException($"User dengan email {user.Email} sudah ada");
             }
 
             // get the main role for being assigned to newly added user for default
@@ -73,32 +74,65 @@ namespace QuizApi.Repositories
                 user.RoleId = role.RoleId;
             }
 
-            user.UserId = Guid.NewGuid().ToString("N");
+            actionModelHelper.AssignCreateModel(user, "User", "");
             user.HashedPassword = passwordHasherHelper.Hash(password);
-            user.CreatedTime = DateTime.UtcNow;
-            user.ModifiedTime = DateTime.UtcNow;
-            user.RecordStatus = RecordStatusConstant.Active;
+
+            // username is taken from the first part of email (before @)
+            user.Username = user.Email.Split('@')[0];
 
             await SendOTPEmailAsync(user);
 
             await dBContext.AddAsync(user);
             await dBContext.SaveChangesAsync();
+
+            // return the user 
+            // useful if the email is wrong and user wants to change it
+            return mapper.Map<UserDto>(user);
         }
 
-        public async Task SendOTPEmailAsync(UserModel user)
+        public async Task ResendOTPEmailAsync(UserModel user)
+        {
+            // check the otp for checking if new otp can be resent
+            var otps = await dBContext.Otp.Where(x => x.Email == user.Email &&
+                            x.RecordStatus == RecordStatusConstant.Active)
+                            // descending order from the new otps
+                            .OrderByDescending(x => x.CreatedTime)
+                            .ToListAsync();
+
+            if (otps.Count > 0)
+            {
+                // check if the previous otp surpasses 10 minutes
+                // the first otps is the exact previous otp
+                TimeSpan timeSpan = DateTime.UtcNow - (otps[0].CreatedTime ?? DateTime.UtcNow);
+                if (timeSpan.TotalMinutes < 10)
+                {
+                    throw new KnownException("Kode OTP baru hanya bisa diminta setelah 10 menit");
+                }
+                else
+                {
+                    await SendOTPEmailAsync(user);
+                }
+            }
+            else
+            {
+                // if the otp for the newly registered user is not found
+                // send
+                await SendOTPEmailAsync(user);
+            }
+        }
+
+        private async Task SendOTPEmailAsync(UserModel user)
         {
             Random rnd = new Random();
             var otpCode = rnd.Next(1000, 9999);
 
             var otp = new OtpModel
             {
-                OtpId = Guid.NewGuid().ToString("N"),
                 Email = user.Email,
                 OtpCode = otpCode,
-                CreatedTime = DateTime.UtcNow,
-                ModifiedTime = DateTime.UtcNow,
-                RecordStatus = RecordStatusConstant.Active
             };
+
+            actionModelHelper.AssignCreateModel(otp, "Otp", user.UserId);
 
             await dBContext.AddAsync(otp);
             await dBContext.SaveChangesAsync();
@@ -109,15 +143,18 @@ namespace QuizApi.Repositories
                 Name = user.Name,
                 Text = $"Kode OTP Anda adalah {otpCode}"
             };
+
+            // send the queue to consumer
             await queueService.Publish(QueueConstant.EmailQueue, email);
         }
 
         public async Task CheckOtpValidationAsync(CheckOtpDto checkOtpDto)
         {
             var otpExists = await dBContext.Otp.AnyAsync(x => x.Email == checkOtpDto.Email &&
-                                                            x.OtpCode == checkOtpDto.OtpCode &&
-                                                            x.RecordStatus.ToLower().Equals(RecordStatusConstant.Active.ToLower()) &&
-                                                            DateTime.UtcNow < x.ExpiredTime);
+                            x.OtpCode == checkOtpDto.OtpCode &&
+                            x.RecordStatus.ToLower().Equals(RecordStatusConstant.Active.ToLower()) &&
+                            DateTime.UtcNow < x.ExpiredTime);
+
             if (otpExists == false)
             {
                 throw new KnownException("Kode OTP tidak valid");
@@ -134,13 +171,13 @@ namespace QuizApi.Repositories
             await dBContext.SaveChangesAsync();
         }
 
-        public async Task<bool> IsValidToCreateUser(string email, string username)
+        public async Task<bool> IsValidToCreateUser(string email)
         {
-            bool user = await dBContext.User
-                .AnyAsync(user =>
-                    (user.Email == email || user.Username.ToLower() == username.ToLower()) &&
-                    user.RecordStatus.ToLower() == RecordStatusConstant.Active.ToLower());
+            bool user = await dBContext.User.AnyAsync(user =>
+                    user.Email == email &&
+                    user.RecordStatus == RecordStatusConstant.Active);
 
+            // if the user exists, return false
             return !user;
         }
 
