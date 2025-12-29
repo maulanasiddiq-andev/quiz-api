@@ -8,6 +8,7 @@ using QuizApi.Extensions;
 using QuizApi.Models;
 using QuizApi.Services;
 using QuizApi.Settings;
+using RabbitMQ.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -122,6 +123,16 @@ builder.Services.AddStackExchangeRedisCache(options =>
 });
 
 builder.Services.RegisterRepositories();
+
+// RabbitMQ
+var rabbitMQConnectionString = builder.Configuration.GetConnectionString("RabbitMQ");
+builder.Services.AddSingleton(sp =>
+{
+    return new ConnectionFactory
+    {
+        Uri = new Uri(rabbitMQConnectionString ?? "amqp://guest:guest@localhost:5672/")
+    }.CreateConnectionAsync().GetAwaiter().GetResult();
+});
 
 // for swagger
 builder.Services.AddEndpointsApiExplorer();
