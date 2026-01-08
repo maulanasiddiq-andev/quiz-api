@@ -69,7 +69,7 @@ namespace QuizApi.Repositories
                     ModifiedTime = x.ModifiedTime,
                     Version = x.Version,
                     RecordStatus = x.RecordStatus,
-                    QuestionCount = x.Questions.Where(q => q.RecordStatus == RecordStatusConstant.Active).Count(),
+                    QuestionCount = x.Questions.Count(q => q.RecordStatus == RecordStatusConstant.Active),
                     HistoriesCount = x.Histories.Count(),
                     // check if the current user has taken the quiz
                     IsTakenByUser = x.Histories.Any(y => y.UserId == userId)
