@@ -141,6 +141,30 @@ namespace QuizApi.Controllers
             }
         }
 
+        [HttpGet]
+        [Route("{id}/simple")]
+        public async Task<BaseResponse> GetSimpleUserAsync([FromRoute] string id)
+        {
+            try
+            {
+                var result = await userRepository.GetSimpleUserDtoAsync(id);
+
+                return new BaseResponse(true, "", result);
+            }
+            catch (KnownException ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ex.Message, null);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
         [RoleModuleValidation(ModuleConstant.SearchQuiz)]
         [HttpGet]
         [Route("{id}/quiz")]
