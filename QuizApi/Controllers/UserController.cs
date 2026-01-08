@@ -140,5 +140,79 @@ namespace QuizApi.Controllers
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
         }
+
+        [RoleModuleValidation(ModuleConstant.SearchQuiz)]
+        [HttpGet]
+        [Route("{id}/quiz")]
+        public async Task<BaseResponse> GetQuizzesByUserIdAsync([FromRoute] string id, [FromQuery] SearchRequestDto searchRequest)
+        {
+            try
+            {
+                var result = await userRepository.GetQuizzesByUserIdAsync(id, searchRequest);
+
+                return new BaseResponse(true, "", result);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
+        [RoleModuleValidation(ModuleConstant.DetailUser)]
+        [HttpGet]
+        [Route("{id}/history")]
+        public async Task<BaseResponse> GetHistoriesByUserIdAsync([FromRoute] string id, [FromQuery] SearchRequestDto searchRequest)
+        {
+            try
+            {
+                var result = await userRepository.GetHistoriesByUserIdAsync(id, searchRequest);
+
+                return new BaseResponse(true, "", result);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
+        [HttpGet]
+        [Route("self-quiz")]
+        public async Task<BaseResponse> GetSelfQuizzesAsync([FromQuery] SearchRequestDto searchRequest)
+        {
+            try
+            {
+                var result = await userRepository.GetSelfQuizzesAsync(searchRequest);
+
+                return new BaseResponse(true, "", result);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
+        [HttpGet]
+        [Route("self-history")]
+        public async Task<BaseResponse> GetSelfHistoriesAsync([FromQuery] SearchRequestDto searchRequest)
+        {
+            try
+            {
+                var result = await userRepository.GetSelfHistoriesAsync(searchRequest);
+
+                return new BaseResponse(true, "", result);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
     }
 }
