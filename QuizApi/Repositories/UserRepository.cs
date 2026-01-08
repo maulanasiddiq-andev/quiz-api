@@ -134,6 +134,20 @@ namespace QuizApi.Repositories
             await dBContext.SaveChangesAsync();
         }
 
+        public async Task<SimpleUserDto> GetSimpleUserDtoAsync(string id)
+        {
+            UserModel? user = await GetActiveUserByIdAsync(id);
+
+            if (user is null)
+            {
+                throw new KnownException(ErrorMessageConstant.DataNotFound);
+            }
+
+            SimpleUserDto simpleUser = mapper.Map<SimpleUserDto>(user);
+
+            return simpleUser;
+        }
+
         public async Task<SearchResponse> GetQuizzesByUserIdAsync(string id, SearchRequestDto searchRequest)
         {
             IQueryable<QuizDto> listQuizzesQuery = dBContext.Quiz
