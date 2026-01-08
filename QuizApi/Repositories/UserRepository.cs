@@ -9,6 +9,9 @@ using QuizApi.Helpers;
 using QuizApi.Models;
 using QuizApi.Models.Identity;
 using QuizApi.Responses;
+using QuizApi.DTOs.Quiz;
+using QuizApi.Models.QuizHistory;
+using QuizApi.DTOs.QuizHistory;
 
 namespace QuizApi.Repositories
 {
@@ -129,6 +132,140 @@ namespace QuizApi.Repositories
 
             dBContext.Update(user);
             await dBContext.SaveChangesAsync();
+        }
+
+        public async Task<SearchResponse> GetQuizzesByUserIdAsync(string id, SearchRequestDto searchRequest)
+        {
+            IQueryable<QuizDto> listQuizzesQuery = dBContext.Quiz
+                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == id)
+                .Select(x => new QuizDto
+                {
+                    QuizId = x.QuizId,
+                    Title = x.Title,
+                    Description = x.Description,
+                    ImageUrl = x.ImageUrl,
+                    CategoryId = x.CategoryId,
+                    Category = mapper.Map<CategoryDto>(x.Category),
+                    Time = x.Time,
+                    UserId = x.UserId,
+                    CreatedBy = x.CreatedBy,
+                    CreatedTime = x.CreatedTime,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedTime = x.ModifiedTime,
+                    Version = x.Version,
+                    RecordStatus = x.RecordStatus,
+                    QuestionCount = x.Questions.Count(q => q.RecordStatus == RecordStatusConstant.Active),
+                    HistoriesCount = x.Histories.Count(),
+                    // check if the current user has taken the quiz
+                    IsTakenByUser = x.Histories.Any(y => y.UserId == userId)
+                });
+
+            // sorting
+            listQuizzesQuery = listQuizzesQuery.OrderByDescending(x => x.CreatedTime);
+
+            var response = new SearchResponse();
+            response.TotalItems = await listQuizzesQuery.CountAsync();
+            response.CurrentPage = searchRequest.CurrentPage;
+            response.PageSize = searchRequest.PageSize;
+
+            var skip = searchRequest.PageSize * searchRequest.CurrentPage;
+            var take = searchRequest.PageSize;
+            var listQuiz = await listQuizzesQuery.Skip(skip).Take(take).ToListAsync();
+
+            response.Items = listQuiz;
+
+            return response;
+        }
+
+        public async Task<SearchResponse> GetHistoriesByUserIdAsync(string id, SearchRequestDto searchRequest)
+        {
+            IQueryable<QuizHistoryModel> listQuizHistoriesQuery = dBContext.QuizHistory
+                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == id)
+                .Include(x => x.User)
+                .Include(x => x.Quiz)
+                .AsQueryable();
+
+            // sorting
+            listQuizHistoriesQuery = listQuizHistoriesQuery.OrderByDescending(x => x.CreatedTime);
+
+            var response = new SearchResponse();
+            response.TotalItems = await listQuizHistoriesQuery.CountAsync();
+            response.CurrentPage = searchRequest.CurrentPage;
+            response.PageSize = searchRequest.PageSize;
+
+            var skip = searchRequest.PageSize * searchRequest.CurrentPage;
+            var take = searchRequest.PageSize;
+            var listQuizHistories = await listQuizHistoriesQuery.Skip(skip).Take(take).ToListAsync();
+
+            response.Items = mapper.Map<List<QuizHistoryDto>>(listQuizHistories);
+
+            return response;
+        }
+
+        public async Task<SearchResponse> GetSelfQuizzesAsync(SearchRequestDto searchRequest)
+        {
+            IQueryable<QuizDto> listQuizzesQuery = dBContext.Quiz
+                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == userId)
+                .Select(x => new QuizDto
+                {
+                    QuizId = x.QuizId,
+                    Title = x.Title,
+                    Description = x.Description,
+                    ImageUrl = x.ImageUrl,
+                    CategoryId = x.CategoryId,
+                    Category = mapper.Map<CategoryDto>(x.Category),
+                    Time = x.Time,
+                    UserId = x.UserId,
+                    CreatedBy = x.CreatedBy,
+                    CreatedTime = x.CreatedTime,
+                    ModifiedBy = x.ModifiedBy,
+                    ModifiedTime = x.ModifiedTime,
+                    Version = x.Version,
+                    RecordStatus = x.RecordStatus,
+                    QuestionCount = x.Questions.Count(q => q.RecordStatus == RecordStatusConstant.Active),
+                    HistoriesCount = x.Histories.Count()
+                });
+
+            // sorting
+            listQuizzesQuery = listQuizzesQuery.OrderByDescending(x => x.CreatedTime);
+
+            var response = new SearchResponse();
+            response.TotalItems = await listQuizzesQuery.CountAsync();
+            response.CurrentPage = searchRequest.CurrentPage;
+            response.PageSize = searchRequest.PageSize;
+
+            var skip = searchRequest.PageSize * searchRequest.CurrentPage;
+            var take = searchRequest.PageSize;
+            var listQuiz = await listQuizzesQuery.Skip(skip).Take(take).ToListAsync();
+
+            response.Items = listQuiz;
+
+            return response;
+        }
+
+        public async Task<SearchResponse> GetSelfHistoriesAsync(SearchRequestDto searchRequest)
+        {
+            IQueryable<QuizHistoryModel> listQuizHistoriesQuery = dBContext.QuizHistory
+                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == userId)
+                .Include(x => x.User)
+                .Include(x => x.Quiz)
+                .AsQueryable();
+
+            // sorting
+            listQuizHistoriesQuery = listQuizHistoriesQuery.OrderByDescending(x => x.CreatedTime);
+
+            var response = new SearchResponse();
+            response.TotalItems = await listQuizHistoriesQuery.CountAsync();
+            response.CurrentPage = searchRequest.CurrentPage;
+            response.PageSize = searchRequest.PageSize;
+
+            var skip = searchRequest.PageSize * searchRequest.CurrentPage;
+            var take = searchRequest.PageSize;
+            var listQuizHistories = await listQuizHistoriesQuery.Skip(skip).Take(take).ToListAsync();
+
+            response.Items = mapper.Map<List<QuizHistoryDto>>(listQuizHistories);
+
+            return response;
         }
         
         private async Task<UserModel?> GetActiveUserByIdAsync(string id)
