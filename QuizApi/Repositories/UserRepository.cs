@@ -281,6 +281,24 @@ namespace QuizApi.Repositories
 
             return response;
         }
+
+        public async Task<int> GetSelfQuizCountAsync()
+        {
+            int quizCount = await dBContext.Quiz
+                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == userId)
+                .CountAsync();
+
+            return quizCount;
+        }
+
+        public async Task<int> GetSelfHistoryCountAsync()
+        {
+            int historyCount = await dBContext.QuizHistory
+                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == userId)
+                .CountAsync();
+
+            return historyCount;
+        }
         
         private async Task<UserModel?> GetActiveUserByIdAsync(string id)
         {
