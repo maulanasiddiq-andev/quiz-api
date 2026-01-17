@@ -238,5 +238,41 @@ namespace QuizApi.Controllers
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
         }
+
+        [HttpGet]
+        [Route("self-quiz-count")]
+        public async Task<BaseResponse> GetSelfQuizCountAsync()
+        {
+            try
+            {
+                var result = await userRepository.GetSelfQuizCountAsync();
+
+                return new BaseResponse(true, "", result);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
+
+        [HttpGet]
+        [Route("self-history-count")]
+        public async Task<BaseResponse> GetSelfHistoryCountAsync()
+        {
+            try
+            {
+                var result = await userRepository.GetSelfHistoryCountAsync();
+
+                return new BaseResponse(true, "", result);
+            }
+            catch (Exception ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+            }
+        }
     }
 }
