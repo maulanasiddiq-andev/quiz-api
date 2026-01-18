@@ -1,4 +1,5 @@
 using AutoMapper;
+using Google.Apis.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using QuizApi.Attributes;
@@ -272,6 +273,12 @@ namespace QuizApi.Controllers
                 }
                 
                 return new BaseResponse(true, "", tokenDto);
+            }
+            catch (InvalidJwtException ex)
+            {
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+
+                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
             catch (Exception ex)
             {
