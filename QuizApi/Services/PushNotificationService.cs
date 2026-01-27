@@ -32,6 +32,7 @@ namespace QuizApi.Services
                     }
                 }
             };
+            Console.WriteLine(pushNotificationSetting.ProjectId);
 
             var json = JsonSerializer.Serialize(message);
             using var client = new HttpClient();
