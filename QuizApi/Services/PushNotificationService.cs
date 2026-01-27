@@ -53,6 +53,7 @@ namespace QuizApi.Services
             // var path = Path.Combine(AppContext.BaseDirectory, "firebase-service-account.json");
             
             var credential = await GoogleCredential.GetApplicationDefaultAsync();
+            Console.WriteLine(credential.ToString());
 
             credential = credential.CreateScoped("https://www.googleapis.com/auth/cloud-platform");
 
