@@ -44,6 +44,9 @@ namespace QuizApi.Services
             );
 
             var result = await response.Content.ReadAsStringAsync();
+
+            Console.WriteLine($"FCM status: {response.StatusCode}");
+            Console.WriteLine($"FCM body: {response}");
         }
 
         private async Task<string> GetAccessTokenAsync()
