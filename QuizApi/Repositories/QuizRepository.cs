@@ -17,6 +17,7 @@ using QuizApi.DTOs.Identity;
 using QuizApi.Helpers;
 using QuizApi.Services;
 using QuizApi.Models.Identity;
+using QuizApi.Queues;
 
 namespace QuizApi.Repositories
 {
@@ -26,21 +27,21 @@ namespace QuizApi.Repositories
         private readonly IMapper mapper;
         private readonly string userId = "";
         private readonly ActionModelHelper actionModelHelper;
-        private readonly PushNotificationService pushNotificationService;
         // for updating quiz
         private readonly CategoryRepository categoryRepository;
+        private readonly QueueService queueService;
         public QuizRepository(
             QuizAppDBContext dBContext,
             IMapper mapper,
             IHttpContextAccessor httpContextAccessor,
-            PushNotificationService pushNotificationService,
-            CategoryRepository categoryRepository
+            CategoryRepository categoryRepository,
+            QueueService queueService
         )
         {
             this.dBContext = dBContext;
             this.mapper = mapper;
-            this.pushNotificationService = pushNotificationService;
             this.categoryRepository = categoryRepository;
+            this.queueService = queueService;
             actionModelHelper = new ActionModelHelper();
 
             if (httpContextAccessor != null)
@@ -474,14 +475,14 @@ namespace QuizApi.Repositories
                 UserModel? quizTaker = await dBContext.User.Where(x => x.UserId == userId).FirstOrDefaultAsync();
                 if (quizTaker != null)
                 {
-                    foreach (var fcmToken in fcmTokens)
+                    var notificationQueue = new NotificationQueue
                     {
-                        await pushNotificationService.SendNotificationAsync(
-                            fcmToken.Token,
-                            "Kuis Dikerjakan",
-                            $"{quizTaker.Name} telah mengerjakan kuis anda yang berjudul \"{quiz.Title}\""
-                        );   
-                    }   
+                        FcmTokens = fcmTokens.Select(x => x.Token).ToList(),
+                        Title = "Kuis Anda Dikerjakan",
+                        Body = $"{quizTaker.Name} telah mengerjakan kuis Anda: {quiz.Title}"
+                    };
+
+                    await queueService.Publish(QueueConstant.NotificationQueue, notificationQueue);   
                 }
             }
 
