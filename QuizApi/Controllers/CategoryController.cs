@@ -74,8 +74,7 @@ namespace QuizApi.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
-                // activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }

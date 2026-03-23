@@ -8,7 +8,6 @@ using QuizApi.DTOs.Auth;
 using QuizApi.DTOs.Identity;
 using QuizApi.Exceptions;
 using QuizApi.Extensions;
-using QuizApi.Models.Auth;
 using QuizApi.Models.Identity;
 using QuizApi.Repositories;
 using QuizApi.Responses;
@@ -67,8 +66,7 @@ namespace QuizApi.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
-                // activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
@@ -134,8 +132,7 @@ namespace QuizApi.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
-                // activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }

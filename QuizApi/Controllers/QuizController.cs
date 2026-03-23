@@ -43,8 +43,7 @@ namespace QuizApi.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
-                // activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
@@ -182,8 +181,7 @@ namespace QuizApi.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
-                // activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }
@@ -231,14 +229,13 @@ namespace QuizApi.Controllers
             }
             catch (KnownException ex)
             {
-                // activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ex.Message, null);
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
-                // activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
                 return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
             }

@@ -122,6 +122,15 @@ builder.Services.AddKeyedSingleton("quiz-db", (sp, key) =>
     }.Build();
 });
 
+builder.Services.AddKeyedSingleton("quiz-db-activity-log", (sp, key) => 
+{
+    return new FirestoreDbBuilder
+    {
+        ProjectId = builder.Configuration["GoogleSetting:ProjectId"],
+        DatabaseId = "quiz-db-activity-log"
+    }.Build();
+});
+
 var quizAppConnectionString = builder.Configuration.GetConnectionString("QuizAppPostgreSQL");
 builder.Services.AddDbContext<QuizAppDBContext>(options =>
 {

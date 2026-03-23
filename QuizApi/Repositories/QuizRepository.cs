@@ -13,7 +13,6 @@ using QuizApi.Models;
 using QuizApi.Models.Quiz;
 using QuizApi.Models.QuizHistory;
 using QuizApi.Responses;
-using QuizApi.DTOs.Identity;
 using QuizApi.Helpers;
 using QuizApi.Services;
 using QuizApi.Models.Identity;

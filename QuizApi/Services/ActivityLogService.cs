@@ -1,13 +1,16 @@
 using System.ComponentModel.DataAnnotations;
+using Google.Cloud.Firestore;
 using Microsoft.EntityFrameworkCore;
 
 namespace QuizApi.Services
 {
     public class ActivityLogService
     {
+        private readonly FirestoreDb firestoreDb;
         private readonly ActivityLogDBContext _dBContext;
-        public ActivityLogService(ActivityLogDBContext dBContext)
+        public ActivityLogService(ActivityLogDBContext dBContext, [FromKeyedServices("quiz-db-activity-log")] FirestoreDb firestoreDb)
         {
+            this.firestoreDb = firestoreDb;
             _dBContext = dBContext;
         }
 
@@ -19,9 +22,9 @@ namespace QuizApi.Services
             string refId = ""
         )
         {
-            var task = Task.Run(async () =>
+            // Start the task in the background and move on immediately
+            _ = Task.Run(async () =>
             {
-
                 try
                 {
                     UserActivityLogModel userActivityLog = new()
@@ -36,17 +39,16 @@ namespace QuizApi.Services
                         ToJsonObject = toObject
                     };
 
-
-                    _dBContext.Add(userActivityLog);
-                    await _dBContext.SaveChangesAsync();
+                    await firestoreDb.Collection("useractivitylog").AddAsync(userActivityLog);
                 }
                 catch (Exception ex)
                 {
+                    // Fallback to error logging if the activity log fails
+                    // Note: Since this is already in a Task.Run, call the logic directly 
+                    // or ensure SaveErrorLog also handles its own background threading.
                     SaveErrorLog(ex, action, userId);
                 }
             });
-
-            task.Wait();
         }
 
         public void SaveErrorLog(
@@ -58,54 +60,38 @@ namespace QuizApi.Services
             string errorLevel = "Basic"
         )
         {
+            string message = ex?.ToString() ?? "Unknown Error";
+            string? stackTrace = ex?.StackTrace;
 
-            string? message = ex?.Message;
-            string? strakTrace = ex?.StackTrace;
-
-            try
-            {
-                if (ex?.InnerException != null)
-                {
-                    message += " " + ex.InnerException.Message;
-                    strakTrace += " " + ex.InnerException.StackTrace;
-
-                    if (ex.InnerException.InnerException != null)
-                    {
-                        message += " " + ex.InnerException.InnerException.Message;
-                        strakTrace += " " + ex.InnerException.InnerException.StackTrace;
-                    }
-                }
-            }
-            catch { }
-
-
-            var task = Task.Run(async () =>
+            // We start the task but do NOT call .Wait()
+            // This allows the LoginAsync method to finish and return the response immediately
+            _ = Task.Run(async () =>
             {
                 try
                 {
                     ErrorActivityLogModel errorLog = new()
                     {
                         ErrorActivityLogId = Guid.NewGuid().ToString("N"),
-                        StackTrace = strakTrace,
+                        StackTrace = stackTrace,
                         ErrorLevel = errorLevel,
                         UserId = userId ?? "",
                         Action = action,
                         Message = message,
                         IsResolved = false,
                         FromJsonObject = fromObject,
-                        ToJsonObject = toObject
+                        ToJsonObject = toObject,
+                        UtcDate = DateTime.UtcNow
                     };
 
-                    _dBContext.Add(errorLog);
-                    await _dBContext.SaveChangesAsync();
+                    await firestoreDb.Collection("erroractivitylog").AddAsync(errorLog);
                 }
-                catch
+                catch (Exception firestoreEx)
                 {
-
+                    // Since this is in a background thread, we log to console 
+                    // so we can see if it fails in the server logs.
+                    Console.WriteLine($"Logging failed: {firestoreEx.Message}");
                 }
             });
-
-            task.Wait();
         }
     }
 
@@ -142,6 +128,7 @@ namespace QuizApi.Services
         public DbSet<UserActivityLogModel> UserActivityLog { get; set; }
     }
 
+    [FirestoreData]
     public class ErrorActivityLogModel
     {
         public ErrorActivityLogModel()
@@ -151,22 +138,32 @@ namespace QuizApi.Services
             ErrorLevel = "Basic";
         }
 
-        [Key]
+        [FirestoreProperty]
         public string ErrorActivityLogId { get; set; } = string.Empty;
+        [FirestoreProperty]
         public string UserId { get; set; } = string.Empty;
+        [FirestoreProperty]
         public DateTime UtcDate { get; set; }
         // Related to ModulConstant
+        [FirestoreProperty]
         public string? Action { get; set; }
         //Basic, Fatal
+        [FirestoreProperty]
         public string? ErrorLevel { get; set; }
+        [FirestoreProperty]
         public string? Message { get; set; }
+        [FirestoreProperty]
         public string? StackTrace { get; set; }
+        [FirestoreProperty]
         public string? FromJsonObject { get; set; }
+        [FirestoreProperty]
         public string? ToJsonObject { get; set; }
+        [FirestoreProperty]
         public bool IsResolved { get; set; }
     }
 
 
+    [FirestoreData]
     public class UserActivityLogModel
     {
         public UserActivityLogModel()
@@ -176,19 +173,29 @@ namespace QuizApi.Services
             Status = "OK";
         }
 
-        [Key]
+        [FirestoreProperty]
         public string UserActivityLogId { get; set; } = string.Empty;
+        [FirestoreProperty]
         public string UserId { get; set; } = string.Empty;
+        [FirestoreProperty]
         public DateTime UtcDate { get; set; }
+        [FirestoreProperty]
         public string? Action { get; set; }
+        [FirestoreProperty]
         public string? Description { get; set; }
+        [FirestoreProperty]
         public string? FromJsonObject { get; set; }
+        [FirestoreProperty]
         public string? ToJsonObject { get; set; }
         // Related To Table Key
+        [FirestoreProperty]
         public string? ReferenceKeyId { get; set; }
+        [FirestoreProperty]
         public string? ReferenceTable { get; set; }
+        [FirestoreProperty]
         public string? Status { get; set; }
         // OK, Danger, Very Danger
+        [FirestoreProperty]
         public string? ActionLevel { get; set; }
     }
 }
