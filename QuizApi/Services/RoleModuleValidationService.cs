@@ -1,94 +1,53 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
+using Google.Cloud.Firestore;
 using QuizApi.Constants;
-using QuizApi.Exceptions;
-using QuizApi.Models;
 using QuizApi.Models.Identity;
+using QuizApi.Models;
 
 namespace QuizApi.Services
 {
     public class RoleModuleValidationService
     {
-        private readonly QuizAppDBContext dbContext;
-        private readonly CacheService cacheService;
-        private readonly ActivityLogService activityLogService;
+        private readonly FirestoreDb _firestoreDb;
+        private readonly ActivityLogService _activityLogService;
 
         public RoleModuleValidationService(
-            QuizAppDBContext context,
-            ActivityLogService logService,
-            CacheService icacheService
+            [FromKeyedServices("quiz-db")] FirestoreDb firestoreDb, 
+            ActivityLogService logService
         )
         {
-            activityLogService = logService;
-            dbContext = context;
-            cacheService = icacheService;
+            _firestoreDb = firestoreDb;
+            _activityLogService = logService;
         }
 
-        public async Task<bool> IsHideOthers(string userId, string modulName)
+        public async Task<bool> IsAllowAccessModuleAsync(string userId, string moduleName)
         {
-            return await IsAllowAccessModuleAsync(userId, modulName);
-        }
-
-        public async Task<bool> IsAllowAccessModuleAsync(string userId, string modulName)
-        {
-            bool isAllow = false;
-
             try
             {
-                // Prefer To Use memory DB First
-                // Remove memory DB when RoleModul Created or Modified
-                IEnumerable<RoleModuleModel>? roleModuleInCache = await cacheService.GetDataAsync<IEnumerable<RoleModuleModel>>(MemoryCacheConstant.RoleModuleKey + userId);
+                // 1. Get the User to find their RoleId
+                Query query = _firestoreDb.Collection("user").WhereEqualTo("UserId", userId).Limit(1);
+                QuerySnapshot userSnap = await query.GetSnapshotAsync();
 
-                if (roleModuleInCache != null)
-                {
-                    RoleModuleModel? roleModul = roleModuleInCache
-                        .Where(a => a.RecordStatus.Equals(RecordStatusConstant.Active) && a.RoleModuleName.Equals(modulName))
-                        .FirstOrDefault();
+                if (!userSnap.Documents.Any()) return false;
 
-                    if (roleModul != null) isAllow = true;
-                }
-                else
-                {
-                    if (userId is null)
-                    {
-                        throw new KnownException(ErrorMessageConstant.DataNotFound);
-                    }
+                // Extract RoleId directly to avoid full model conversion if preferred
+                string? roleId = userSnap.Documents.First().GetValue<string>("RoleId");
+                if (string.IsNullOrEmpty(roleId)) return false;
 
-                    UserModel? existingUser = await dbContext.User.Where(a => a.UserId == userId).SingleOrDefaultAsync();
-                    if (existingUser is null)
-                    {
-                        throw new KnownException(ErrorMessageConstant.DataNotFound);
-                    }
+                // 2. Check if a RoleModule exists for this Role and Module Name
+                // Collection name should match your Firestore setup (lowercase recommended)
+                Query moduleQuery = _firestoreDb.Collection("rolemodule")
+                    .WhereEqualTo("RoleId", roleId)
+                    .WhereEqualTo("RoleModuleName", moduleName)
+                    .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                    .Limit(1);
 
-                    List<RoleModuleModel> roleModules = await dbContext.RoleModule
-                        .Where(a => a.RecordStatus == RecordStatusConstant.Active && a.RoleId == existingUser.RoleId)
-                        .ToListAsync();
+                QuerySnapshot moduleSnap = await moduleQuery.GetSnapshotAsync();
 
-                    // check existing role modul
-                    RoleModuleModel? roleModul = roleModules.Where(a => a.RoleModuleName == modulName).FirstOrDefault();
-                    
-                    if (roleModul != null)
-                    {
-                        isAllow = true;
-
-                        var cacheEntryOptions = new MemoryCacheEntryOptions()
-                            .SetSlidingExpiration(TimeSpan.FromHours(1))
-                            .SetAbsoluteExpiration(TimeSpan.FromHours(8))
-                            .SetPriority(CacheItemPriority.Normal)
-                            .SetSize(1);
-
-                        // Don't Forget : Remove when role modul modified
-                        // Don't Forget : Remove when user role modified
-                        await cacheService.SetDataAsync(MemoryCacheConstant.RoleModuleKey + userId, roleModules, TimeSpan.FromHours(8));
-                    }
-                }
-
-                return isAllow;
+                return moduleSnap.Documents.Count > 0;
             }
             catch (Exception ex)
             {
-                activityLogService.SaveErrorLog(ex, "IsAllowAccessModule", userId);
-
+                _activityLogService.SaveErrorLog(ex, "IsAllowAccessModuleFirestore", userId);
                 return false;
             }
         }

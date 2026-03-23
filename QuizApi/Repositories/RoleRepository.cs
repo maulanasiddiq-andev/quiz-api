@@ -1,4 +1,5 @@
 using AutoMapper;
+using Google.Cloud.Firestore;
 using Microsoft.EntityFrameworkCore;
 using QuizApi.Constants;
 using QuizApi.DTOs.Identity;
@@ -15,6 +16,7 @@ namespace QuizApi.Repositories
 {
     public class RoleRepository
     {
+        private readonly FirestoreDb firestoreDb;
         private readonly IMapper mapper;
         private readonly QuizAppDBContext dBContext;
         private readonly string userId = "";
@@ -22,12 +24,14 @@ namespace QuizApi.Repositories
         private readonly ActionModelHelper actionModelHelper;
         private readonly string tableName = "Role";
         public RoleRepository(
+            [FromKeyedServices("quiz-db")] FirestoreDb firestoreDb,
             IMapper mapper,
             QuizAppDBContext dBContext,
             IHttpContextAccessor httpContextAccessor,
             CacheService cacheService
         )
         {
+            this.firestoreDb = firestoreDb;
             this.mapper = mapper;
             this.dBContext = dBContext;
             this.cacheService = cacheService;
@@ -86,20 +90,19 @@ namespace QuizApi.Repositories
 
         // GET role by id
         // used for JWT
-        public async Task<RoleDto> GetDataByIdAsync(string id)
+        public async Task<RoleDto?> GetDataByIdAsync(string id)
         {
-            RoleModel? role = await GetActiveRoleByIdAsync(id);
+            Query query = firestoreDb.Collection("role").WhereEqualTo("RoleId", id).Limit(1);
 
-            if (role is null)
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Documents.Count > 0)
             {
-                throw new KnownException(ErrorMessageConstant.DataNotFound);
+                var role = snapshot.Documents[0].ConvertTo<RoleModel>();
+                return mapper.Map<RoleDto>(role);
             }
 
-            RoleDto roleDto = mapper.Map<RoleDto>(role);
-            List<RoleModuleModel> roleModules = await GetRoleModulesByRoleId(id);
-            roleDto.RoleModules = mapper.Map<List<RoleModuleDto>>(roleModules);
-
-            return roleDto;
+            return null;
         }
 
         // GET role by id (with-modules)
@@ -147,9 +150,15 @@ namespace QuizApi.Repositories
         // for getting modules assigned to the role
         public async Task<List<RoleModuleModel>> GetRoleModulesByRoleId(string roleId)
         {
-            List<RoleModuleModel> roleModules = await dBContext.RoleModule
-                .Where(x => x.RoleId.Equals(roleId) && x.RecordStatus == RecordStatusConstant.Active)
-                .ToListAsync();
+            CollectionReference roleModuleRef = firestoreDb.Collection("rolemodule");
+
+            Query query = roleModuleRef.WhereEqualTo("RoleId", roleId).WhereEqualTo("RecordStatus", RecordStatusConstant.Active);
+
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            List<RoleModuleModel> roleModules = snapshot.Documents
+                .Select(doc => doc.ConvertTo<RoleModuleModel>())
+                .ToList();
 
             return roleModules;
         }

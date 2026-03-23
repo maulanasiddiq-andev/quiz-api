@@ -1,4 +1,5 @@
 using System.Text;
+using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,9 @@ using QuizApi.Models;
 using QuizApi.Services;
 using QuizApi.Settings;
 using RabbitMQ.Client;
+
+var path = Path.Combine(Directory.GetCurrentDirectory(), "serviceAccountKey.json");
+Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", path);
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -92,6 +96,8 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 
 builder.Services.AddHttpContextAccessor();
 
+builder.Services.Configure<EmailSetting>(builder.Configuration.GetSection("EmailSetting"));
+
 builder.Services.Configure<GoogleSetting>(builder.Configuration.GetSection("GoogleSetting"));
 
 builder.Services.Configure<JWTSetting>(builder.Configuration.GetSection("JwtSetting"));
@@ -100,6 +106,15 @@ builder.Services.Configure<JWTSetting>(builder.Configuration.GetSection("JwtSett
 builder.Services.Configure<PushNotificationSetting>(builder.Configuration.GetSection("PushNotificationSetting"));
 
 builder.Services.AddMemoryCache();
+
+builder.Services.AddKeyedSingleton("quiz-db", (sp, key) => 
+{
+    return new FirestoreDbBuilder
+    {
+        ProjectId = builder.Configuration["GoogleSetting:ProjectId"] ?? "compact-orb-472513-j5",
+        DatabaseId = "quiz-db"
+    }.Build();
+});
 
 var quizAppConnectionString = builder.Configuration.GetConnectionString("QuizAppPostgreSQL");
 builder.Services.AddDbContext<QuizAppDBContext>(options =>

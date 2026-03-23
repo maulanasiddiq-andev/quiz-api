@@ -1,98 +1,55 @@
-using Microsoft.EntityFrameworkCore;
+using Google.Cloud.Firestore;
 using QuizApi.Constants;
 using QuizApi.DTOs.Auth;
-using QuizApi.Exceptions;
-using QuizApi.Models;
 using QuizApi.Models.Auth;
 
 namespace QuizApi.Services
 {
     public class AuthorizationService
     {
-        private readonly QuizAppDBContext _dBContext;
-        private readonly CacheService _cacheService;
-        public AuthorizationService(
-            QuizAppDBContext dBContext,
-            CacheService cacheService
-        )
+        private readonly FirestoreDb _firestoreDb;
+
+        public AuthorizationService(FirestoreDb firestoreDb)
         {
-            _dBContext = dBContext;
-            _cacheService = cacheService;
+            _firestoreDb = firestoreDb;
         }
 
         public async Task<UserTokenDto?> ValidateTokenAsync(string userId, string? token)
         {
             try
             {
-                if (token is null)
+                if (string.IsNullOrEmpty(token)) return null;
+
+                // Query Firestore for the active token matching this user
+                Query query = _firestoreDb.Collection("usertoken")
+                    .WhereEqualTo("UserId", userId)
+                    .WhereEqualTo("Token", token)
+                    .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                    .Limit(1);
+
+                QuerySnapshot snapshot = await query.GetSnapshotAsync();
+                DocumentSnapshot? doc = snapshot.Documents.FirstOrDefault();
+
+                if (doc == null || !doc.Exists) return null;
+
+                var userToken = doc.ConvertTo<UserTokenModel>();
+                
+                // Firestore returns dates as Timestamps; ensure Model handles conversion
+                // Checking if token is expired
+                bool isExpired = userToken.ExpiredTime < DateTime.UtcNow;
+                bool allowed = userToken.IsAccessAllowed && !isExpired;
+
+                return new UserTokenDto
                 {
-                    throw new KnownException(ErrorMessageConstant.DataNotFound);
-                }
-
-                DateTime dateNow = DateTime.UtcNow;
-
-                UserTokenModel? userTokenInMemory = await _cacheService.GetDataAsync<UserTokenModel>(MemoryCacheConstant.UserTokenKey);
-                UserTokenModel? userTokenLogin = null;
-
-                if (userTokenInMemory is not null)
-                {
-                    if (
-                        userTokenInMemory.RecordStatus.ToLower().Equals(RecordStatusConstant.Active.ToLower()) &&
-                        userTokenInMemory.UserId.Equals(userId) &&
-                        userTokenInMemory.Token.Equals(token)
-                    )
-                    {
-                        userTokenLogin = userTokenInMemory;
-                    }
-                }
-
-                if (
-                    userTokenLogin is null ||
-                    userTokenLogin.ExpiredTime < dateNow ||
-                    userTokenLogin.IsAccessAllowed == false
-                )
-                {
-                    UserTokenModel? userTokenInDB = await _dBContext.UserToken
-                        .SingleOrDefaultAsync(x =>
-                            x.RecordStatus.ToLower().Equals(RecordStatusConstant.Active.ToLower()) &&
-                            x.UserId.Equals(userId) &&
-                            x.Token.Equals(token)
-                        );
-
-                    if (userTokenInDB is not null)
-                    {
-                        userTokenLogin = userTokenInDB;
-
-                        await _cacheService.SetDataAsync(MemoryCacheConstant.UserTokenKey, userTokenLogin, TimeSpan.FromMinutes(50));
-                    }
-                }
-
-                if (userTokenLogin is null)
-                {
-                    return null;
-                }
-                else if (userTokenLogin.ExpiredTime < dateNow)
-                {
-                    userTokenLogin.IsAccessAllowed = false;
-                }
-
-                if (!userTokenLogin.IsAccessAllowed)
-                {
-                    userTokenLogin.IsAccessAllowed = false;
-                }
-
-                UserTokenDto tokenDto = new UserTokenDto
-                {
-                    UserTokenId = userTokenLogin.UserTokenId,
-                    UserId = userTokenLogin.UserId,
-                    IsAccessAllowed = userTokenLogin.IsAccessAllowed,
-                    ExpiredTime = userTokenLogin.ExpiredTime
+                    UserTokenId = userToken.UserTokenId,
+                    UserId = userToken.UserId,
+                    IsAccessAllowed = allowed,
+                    ExpiredTime = userToken.ExpiredTime
                 };
-
-                return tokenDto;
             }
             catch (Exception)
             {
+                // Log exception if you have a logger
                 return null;
             }
         }

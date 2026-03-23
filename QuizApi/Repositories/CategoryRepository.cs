@@ -9,23 +9,24 @@ using QuizApi.Responses;
 using QuizApi.Extensions;
 using QuizApi.Exceptions;
 using QuizApi.Helpers;
+using Google.Cloud.Firestore;
 
 namespace QuizApi.Repositories
 {
     public class CategoryRepository
     {
-        private readonly QuizAppDBContext dBContext;
+        private readonly FirestoreDb firestoreDb;
         private readonly IMapper mapper;
         private readonly string userId = "";
         private readonly string tableName = "Category";
         private readonly ActionModelHelper actionModelHelper;
         public CategoryRepository(
-            QuizAppDBContext dBContext,
+            [FromKeyedServices("quiz-db")] FirestoreDb firestoreDb,
             IMapper mapper,
             IHttpContextAccessor httpContextAccessor
         )
         {
-            this.dBContext = dBContext;
+            this.firestoreDb = firestoreDb;
             this.mapper = mapper;
             actionModelHelper = new ActionModelHelper();
 
@@ -37,45 +38,49 @@ namespace QuizApi.Repositories
 
         public async Task<SearchResponse> SearchDatasAsync(SearchRequestDto searchRequest)
         {
-            IQueryable<CategoryModel> listCategoryQuery = dBContext.Category
-                .Where(x => x.RecordStatus.ToLower().Equals(RecordStatusConstant.Active.ToLower()))
-                .AsQueryable();
+            // 1. Initialize the Base Query
+            Query query = firestoreDb.Collection("category")
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active);
 
-            #region Query
+            // 2. Ordering (Firestore requires an index for this)
+            if (searchRequest.OrderBy.Equals("createdTime", StringComparison.OrdinalIgnoreCase))
+            {
+                if (searchRequest.OrderDir.Equals("asc", StringComparison.OrdinalIgnoreCase))
+                    query = query.OrderBy("CreatedTime");
+                else
+                    query = query.OrderByDescending("CreatedTime");
+            }
+
+            // 3. Firestore Search Limitation
+            // Firestore does not support 'ILike' or '%search%'. 
+            // You can only do 'StartsWith' using the range trick below.
             if (!string.IsNullOrWhiteSpace(searchRequest.Search))
             {
-                listCategoryQuery = listCategoryQuery.Where(x => EF.Functions.ILike(x.Name, $"%{searchRequest.Search}%"));
+                string term = searchRequest.Search;
+                query = query.WhereGreaterThanOrEqualTo("Title", term)
+                            .WhereLessThanOrEqualTo("Title", term + "\uf8ff");
             }
-            #endregion
 
-            #region Ordering
-            string orderBy = searchRequest.OrderBy;
-            string orderDir = searchRequest.OrderDir;
-
-            if (orderBy.Equals("createdTime"))
+            // 6. Execution & Manual Projection
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+            
+            // Total Items (Full count in Firestore is billed per document read or using Count() aggregation)
+            var response = new SearchResponse
             {
-                if (orderDir.Equals("asc"))
-                {
-                    listCategoryQuery = listCategoryQuery.OrderBy(x => x.CreatedTime).AsQueryable();
-                }
-                else if (orderDir.Equals("desc"))
-                {
-                    listCategoryQuery = listCategoryQuery.OrderByDescending(x => x.CreatedTime).AsQueryable();
-                }
-            }
-            #endregion
+                TotalItems = snapshot.Count,
+                CurrentPage = searchRequest.CurrentPage,
+                PageSize = searchRequest.PageSize
+            };
 
-            var response = new SearchResponse();
-            response.TotalItems = await listCategoryQuery.CountAsync();
-            response.CurrentPage = searchRequest.CurrentPage;
-            response.PageSize = searchRequest.PageSize;
-
+            // Manual Pagination
             var skip = searchRequest.PageSize * searchRequest.CurrentPage;
-            var take = searchRequest.PageSize;
-            var listCategory = await listCategoryQuery.Skip(skip).Take(take).ToListAsync();
+            var rawItems = snapshot.Documents
+                .Skip(skip)
+                .Take(searchRequest.PageSize)
+                .Select(doc => doc.ConvertTo<CategoryModel>())
+                .ToList();
 
-            response.Items = mapper.Map<List<CategoryDto>>(listCategory);
-
+            response.Items = mapper.Map<List<CategoryDto>>(rawItems);
             return response;
         }
 
@@ -97,79 +102,117 @@ namespace QuizApi.Repositories
         {
             CategoryModel category = mapper.Map<CategoryModel>(categoryDto);
 
-            // check if category is not default
+            // 1. Check if category is not default
             if (category.IsMain == false)
             {
-                // if there is not any default category
-                // throw
-                if (await dBContext.Category.AnyAsync(x => x.IsMain == true) == false)
+                // Check if there is at least one default (IsMain == true) category
+                // We use the Count aggregation for efficiency
+                Query mainCategoryQuery = firestoreDb.Collection("category")
+                    .WhereEqualTo("IsMain", true)
+                    .WhereEqualTo("RecordStatus", RecordStatusConstant.Active);
+
+                AggregateQuerySnapshot snapshot = await mainCategoryQuery.Count().GetSnapshotAsync();
+                
+                if (snapshot.Count == 0)
                 {
                     throw new KnownException("Pilih satu kategori sebagai kategori default");
                 }
             }
 
+            // 2. Assign metadata (IDs and Timestamps)
+            // Note: Ensure tableName matches your Firestore collection name exactly
             actionModelHelper.AssignCreateModel(category, tableName, userId);
 
-            await dBContext.AddAsync(category);
-            await dBContext.SaveChangesAsync();
+            // 3. Save to Firestore
+            await firestoreDb.Collection("category").AddAsync(category);
         }
 
         public async Task<CategoryDto> UpdateDataAsync(string id, CategoryDto categoryDto)
         {
-            CategoryModel? category = await GetActiveCategoryByIdAsync(id);
+            // 1. Get the Document Reference
+            var categoryCollection = firestoreDb.Collection("category");
+            Query query = categoryCollection
+                .WhereEqualTo("CategoryId", id)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .Limit(1);
 
-            if (category is null)
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Documents.Count == 0)
             {
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
+            DocumentSnapshot targetDoc = snapshot.Documents[0];
+            CategoryModel category = targetDoc.ConvertTo<CategoryModel>();
+
+            // 2. Update local model values
             category.Name = categoryDto.Name;
             category.Description = categoryDto.Description ?? "";
             category.IsMain = categoryDto.IsMain;
+            actionModelHelper.AssignUpdateModel(category, userId);
 
-            // if the updated role is changed to main, change other roles to IsMain = false
+            // 3. Initialize a Batch
+            WriteBatch batch = firestoreDb.StartBatch();
+
             if (category.IsMain)
             {
-                List<CategoryModel> roles = await dBContext.Category.Where(x => x.CategoryId != id).ToListAsync();
+                // Find other categories that are currently 'Main' to unset them
+                Query otherMainsQuery = categoryCollection.WhereEqualTo("IsMain", true);
+                QuerySnapshot otherMains = await otherMainsQuery.GetSnapshotAsync();
 
-                foreach (var item in roles)
+                foreach (var doc in otherMains.Documents)
                 {
-                    item.IsMain = false;
+                    if (doc.Id != targetDoc.Id)
+                    {
+                        batch.Update(doc.Reference, "IsMain", false);
+                    }
                 }
-
-                dBContext.UpdateRange(roles);
             }
             else
             {
-                // if there is not any default category
-                // throw
-                if (await dBContext.Category.AnyAsync(x => x.IsMain == true) == false)
+                // Check if at least one Main exists (excluding this one)
+                Query anyMainQuery = categoryCollection.WhereEqualTo("IsMain", true);
+                QuerySnapshot mainCheck = await anyMainQuery.GetSnapshotAsync();
+                
+                // If the only main was this one, and we are turning it off, throw error
+                if (mainCheck.Documents.Count == 1 && mainCheck.Documents[0].Id == targetDoc.Id)
                 {
                     throw new KnownException("Pilih satu kategori sebagai kategori default");
                 }
             }
 
-            actionModelHelper.AssignUpdateModel(category, userId);
-            dBContext.Update(category);
-            await dBContext.SaveChangesAsync();
+            // 4. Commit the changes
+            batch.Set(targetDoc.Reference, category); // Overwrites the doc with the updated model
+            await batch.CommitAsync();
 
             return mapper.Map<CategoryDto>(category);
         }
 
         public async Task DeleteDataAsync(string id)
         {
-            CategoryModel? category = await GetActiveCategoryByIdAsync(id);
+            // Find the document
+            var categoryCollection = firestoreDb.Collection("category");
+            Query query = categoryCollection.WhereEqualTo("CategoryId", id).Limit(1);
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+            DocumentSnapshot? document = snapshot.Documents.FirstOrDefault();
 
-            if (category is null)
+            if (document is null)
             {
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
+            DocumentSnapshot targetDoc = snapshot.Documents[0];
+            CategoryModel category = document.ConvertTo<CategoryModel>();
+            
+            WriteBatch batch = firestoreDb.StartBatch();
             if (category.IsMain == false)
             {
-                // if there is not any default category
-                // throw
-                if (await dBContext.Category.AnyAsync(x => x.IsMain == true) == false)
+                Query anyMainQuery = categoryCollection.WhereEqualTo("IsMain", true);
+                QuerySnapshot mainCheck = await anyMainQuery.GetSnapshotAsync();
+                
+                // If the only main was this one, and we are turning it off, throw error
+                if (mainCheck.Documents.Count == 1 && mainCheck.Documents[0].Id == targetDoc.Id)
                 {
                     throw new KnownException("Pilih satu kategori sebagai kategori default");
                 }
@@ -177,15 +220,25 @@ namespace QuizApi.Repositories
 
             actionModelHelper.AssignDeleteModel(category, userId);
 
-            dBContext.Update(category);
-            await dBContext.SaveChangesAsync();
+            batch.Set(targetDoc.Reference, category); // Overwrites the doc with the updated model
+            await batch.CommitAsync();
         }
 
         private async Task<CategoryModel?> GetActiveCategoryByIdAsync(string id)
         {
-            return await dBContext.Category
-                .Where(x => x.CategoryId.Equals(id) && x.RecordStatus.ToLower().Equals(RecordStatusConstant.Active.ToLower()))
-                .FirstOrDefaultAsync();
+            Query query = firestoreDb.Collection("category")
+                .WhereEqualTo("CategoryId", id)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .Limit(1);
+
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Documents.Count > 0)
+            {
+                return snapshot.Documents[0].ConvertTo<CategoryModel>();
+            }
+
+            return null;
         }
     }
 }

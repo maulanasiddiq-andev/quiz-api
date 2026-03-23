@@ -165,24 +165,24 @@ namespace QuizApi.Controllers
             }
         }
 
-        [RoleModuleValidation(ModuleConstant.SearchQuiz)]
-        [HttpGet]
-        [Route("{id}/quiz")]
-        public async Task<BaseResponse> GetQuizzesByUserIdAsync([FromRoute] string id, [FromQuery] SearchRequestDto searchRequest)
-        {
-            try
-            {
-                var result = await userRepository.GetQuizzesByUserIdAsync(id, searchRequest);
+        // [RoleModuleValidation(ModuleConstant.SearchQuiz)]
+        // [HttpGet]
+        // [Route("{id}/quiz")]
+        // public async Task<BaseResponse> GetQuizzesByUserIdAsync([FromRoute] string id, [FromQuery] SearchRequestDto searchRequest)
+        // {
+        //     try
+        //     {
+        //         var result = await userRepository.GetQuizzesByUserIdAsync(id, searchRequest);
 
-                return new BaseResponse(true, "", result);
-            }
-            catch (Exception ex)
-            {
-                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+        //         return new BaseResponse(true, "", result);
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
-                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
-            }
-        }
+        //         return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+        //     }
+        // }
 
         [RoleModuleValidation(ModuleConstant.DetailUser)]
         [HttpGet]
@@ -203,23 +203,23 @@ namespace QuizApi.Controllers
             }
         }
 
-        [HttpGet]
-        [Route("self-quiz")]
-        public async Task<BaseResponse> GetSelfQuizzesAsync([FromQuery] SearchRequestDto searchRequest)
-        {
-            try
-            {
-                var result = await userRepository.GetSelfQuizzesAsync(searchRequest);
+        // [HttpGet]
+        // [Route("self-quiz")]
+        // public async Task<BaseResponse> GetSelfQuizzesAsync([FromQuery] SearchRequestDto searchRequest)
+        // {
+        //     try
+        //     {
+        //         var result = await userRepository.GetSelfQuizzesAsync(searchRequest);
 
-                return new BaseResponse(true, "", result);
-            }
-            catch (Exception ex)
-            {
-                activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
+        //         return new BaseResponse(true, "", result);
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         activityLogService.SaveErrorLog(ex, this.GetActionName(), this.GetUserId());
 
-                return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
-            }
-        }
+        //         return new BaseResponse(false, ErrorMessageConstant.ServerError, null);
+        //     }
+        // }
 
         [HttpGet]
         [Route("self-history")]

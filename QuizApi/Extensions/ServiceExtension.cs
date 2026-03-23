@@ -24,6 +24,9 @@ namespace QuizApi.Extensions
 
             // queue service
             collection.AddSingleton<QueueService>();
+
+            // services
+            collection.AddScoped<EmailService>();
         }
     }
 }

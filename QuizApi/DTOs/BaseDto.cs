@@ -1,8 +1,10 @@
+using Google.Cloud.Firestore;
+
 namespace QuizApi.DTOs
 {
     public class BaseDto
     {
-        public uint? Version { get; set; }
+        public Timestamp? Version { get; set; }
         public string Description { get; set; } = string.Empty;
         public string? RecordStatus { get; set; }
         public DateTime? CreatedTime { get; set; }

@@ -1,3 +1,5 @@
+using Google.Cloud.Firestore;
+
 namespace QuizApi.DTOs.TakeQuiz
 {
     public class TakeQuizDto
@@ -13,6 +15,6 @@ namespace QuizApi.DTOs.TakeQuiz
         public int? Time { get; set; }
         public List<TakeQuestionDto> Questions { get; set; }
         public int QuestionCount { get; set; }
-        public uint Version { get; set; }
+        public Timestamp Version { get; set; }
     }
 }

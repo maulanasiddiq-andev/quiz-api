@@ -18,11 +18,13 @@ using QuizApi.Helpers;
 using QuizApi.Services;
 using QuizApi.Models.Identity;
 using QuizApi.Queues;
+using Google.Cloud.Firestore;
 
 namespace QuizApi.Repositories
 {
     public class QuizRepository
     {
+        private readonly FirestoreDb firestoreDb;
         private readonly QuizAppDBContext dBContext;
         private readonly IMapper mapper;
         private readonly string userId = "";
@@ -30,18 +32,23 @@ namespace QuizApi.Repositories
         // for updating quiz
         private readonly CategoryRepository categoryRepository;
         private readonly QueueService queueService;
+        private readonly UserRepository userRepository;
         public QuizRepository(
+            [FromKeyedServices("quiz-db")] FirestoreDb firestoreDb,
             QuizAppDBContext dBContext,
             IMapper mapper,
             IHttpContextAccessor httpContextAccessor,
             CategoryRepository categoryRepository,
-            QueueService queueService
+            QueueService queueService,
+            UserRepository userRepository
         )
         {
+            this.firestoreDb = firestoreDb;
             this.dBContext = dBContext;
             this.mapper = mapper;
             this.categoryRepository = categoryRepository;
             this.queueService = queueService;
+            this.userRepository = userRepository;
             actionModelHelper = new ActionModelHelper();
 
             if (httpContextAccessor != null)
@@ -52,71 +59,101 @@ namespace QuizApi.Repositories
 
         public async Task<SearchResponse> SearchDatasAsync(QuizFilterDto searchRequest)
         {
-            IQueryable<QuizDto> listQuizzesQuery = dBContext.Quiz
-                .Where(x => x.RecordStatus == RecordStatusConstant.Active)
-                .Select(x => new QuizDto
-                {
-                    QuizId = x.QuizId,
-                    Title = x.Title,
-                    Description = x.Description,
-                    ImageUrl = x.ImageUrl,
-                    CategoryId = x.CategoryId,
-                    Category = mapper.Map<CategoryDto>(x.Category),
-                    Time = x.Time,
-                    UserId = x.UserId,
-                    CreatedBy = x.CreatedBy,
-                    CreatedTime = x.CreatedTime,
-                    ModifiedBy = x.ModifiedBy,
-                    ModifiedTime = x.ModifiedTime,
-                    Version = x.Version,
-                    RecordStatus = x.RecordStatus,
-                    QuestionCount = x.Questions.Count(q => q.RecordStatus == RecordStatusConstant.Active),
-                    HistoriesCount = x.Histories.Count(),
-                    // check if the current user has taken the quiz
-                    IsTakenByUser = x.Histories.Any(y => y.UserId == userId)
-                });
+            // 1. Initialize the Base Query
+            Query query = firestoreDb.Collection("quiz")
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active);
 
-            #region Query
-            if (!string.IsNullOrWhiteSpace(searchRequest.Search))
-            {
-                listQuizzesQuery = listQuizzesQuery.Where(x => EF.Functions.ILike(x.Title, $"%{searchRequest.Search}%"));
-            }
-            
+            // 2. Filter by Category
             if (!string.IsNullOrEmpty(searchRequest.CategoryId))
             {
-                listQuizzesQuery = listQuizzesQuery.Where(x => x.CategoryId == searchRequest.CategoryId).AsQueryable();
+                query = query.WhereEqualTo("CategoryId", searchRequest.CategoryId);
             }
-            #endregion
 
-            #region Ordering
-            string orderBy = searchRequest.OrderBy;
-            string orderDir = searchRequest.OrderDir;
-
-            if (orderBy.Equals("createdTime"))
+            // 3. Ordering (Firestore requires an index for this)
+            if (searchRequest.OrderBy.Equals("createdTime", StringComparison.OrdinalIgnoreCase))
             {
-                if (orderDir.Equals("asc"))
-                {
-                    listQuizzesQuery = listQuizzesQuery.OrderBy(x => x.CreatedTime).AsQueryable();
-                }
-                else if (orderDir.Equals("desc"))
-                {
-                    listQuizzesQuery = listQuizzesQuery.OrderByDescending(x => x.CreatedTime).AsQueryable();
-                }
+                if (searchRequest.OrderDir.Equals("asc", StringComparison.OrdinalIgnoreCase))
+                    query = query.OrderBy("CreatedTime");
+                else
+                    query = query.OrderByDescending("CreatedTime");
             }
-            #endregion
 
-            var response = new SearchResponse();
-            response.TotalItems = await listQuizzesQuery.CountAsync();
-            response.CurrentPage = searchRequest.CurrentPage;
-            response.PageSize = searchRequest.PageSize;
+            // 4. Firestore Search Limitation
+            // Firestore does not support 'ILike' or '%search%'. 
+            // You can only do 'StartsWith' using the range trick below.
+            if (!string.IsNullOrWhiteSpace(searchRequest.Search))
+            {
+                string term = searchRequest.Search;
+                query = query.WhereGreaterThanOrEqualTo("Title", term)
+                            .WhereLessThanOrEqualTo("Title", term + "\uf8ff");
+            }
 
+            // 5. Execution & Manual Projection
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+            
+            // Total Items (Full count in Firestore is billed per document read or using Count() aggregation)
+            var response = new SearchResponse
+            {
+                TotalItems = snapshot.Count,
+                CurrentPage = searchRequest.CurrentPage,
+                PageSize = searchRequest.PageSize
+            };
+
+            // Manual Pagination
             var skip = searchRequest.PageSize * searchRequest.CurrentPage;
-            var take = searchRequest.PageSize;
-            var listQuiz = await listQuizzesQuery.Skip(skip).Take(take).ToListAsync();
+            var rawItems = snapshot.Documents
+                .Skip(skip)
+                .Take(searchRequest.PageSize)
+                .Select(doc => doc.ConvertTo<QuizModel>())
+                .ToList();
 
-            response.Items = listQuiz;
+            var listQuizDto = new List<QuizDto>();
 
+            foreach (var quiz in rawItems)
+            {
+                var dto = mapper.Map<QuizDto>(quiz);
+
+                // Note: Histories and Questions are separate collections.
+                // To get counts, you must query those collections separately for each item
+                // unless you store the counts directly on the Quiz document.
+                if (dto.CategoryId != null)
+                {
+                    dto.Category = await categoryRepository.GetDataByIdAsync(dto.CategoryId);
+                }
+                dto.QuestionCount = await GetCollectionCount("question", "QuizId", quiz.QuizId);
+                dto.HistoriesCount = await GetCollectionCount("quizhistory", "QuizId", quiz.QuizId);
+                
+                // Check if taken by user
+                dto.IsTakenByUser = await CheckIfTaken(quiz.QuizId, userId);
+
+                listQuizDto.Add(dto);
+            }
+
+            response.Items = listQuizDto;
             return response;
+        }
+
+        private async Task<int> GetCollectionCount(string collection, string filterField, string filterValue)
+        {
+            Query query = firestoreDb.Collection(collection)
+                .WhereEqualTo(filterField, filterValue)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active);
+
+            AggregateQuerySnapshot snapshot = await query.Count().GetSnapshotAsync();
+            return (int)(snapshot.Count ?? 0);
+        }
+
+        private async Task<bool> CheckIfTaken(string quizId, string userId)
+        {
+            if (string.IsNullOrEmpty(userId)) return false;
+
+            Query query = firestoreDb.Collection("quizhistory")
+                .WhereEqualTo("QuizId", quizId)
+                .WhereEqualTo("UserId", userId)
+                .Limit(1);
+
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+            return snapshot.Documents.Count > 0;
         }
 
         public async Task CreateDataAsync(QuizDto quizDto)
@@ -141,97 +178,174 @@ namespace QuizApi.Repositories
                     actionModelHelper.AssignCreateModel(answer, "Answer", userId);
 
                     answerOrder++;
+
+                    // save the answer
+                    await firestoreDb.Collection("answer").AddAsync(answer);
                 }
 
                 questionOrder++;
+
+                // save the question
+                await firestoreDb.Collection("question").AddAsync(question);
             }
 
-            await dBContext.AddAsync(quiz);
-            await dBContext.SaveChangesAsync();
+            // save the quiz
+            await firestoreDb.Collection("quiz").AddAsync(quiz);
         }
 
         public async Task<QuizDto> GetDataByIdAsync(string id)
         {
-            QuizDto? quiz = await dBContext.Quiz
-                .Where(x => x.QuizId.Equals(id) && x.RecordStatus == RecordStatusConstant.Active)
-                .Select(x => new QuizDto
-                {
-                    QuizId = x.QuizId,
-                    Title = x.Title,
-                    Description = x.Description,
-                    ImageUrl = x.ImageUrl,
-                    CategoryId = x.CategoryId,
-                    Category = mapper.Map<CategoryDto>(x.Category),
-                    Time = x.Time,
-                    UserId = x.UserId,
-                    User = mapper.Map<SimpleUserDto>(x.User),
-                    CreatedBy = x.CreatedBy,
-                    CreatedTime = x.CreatedTime,
-                    ModifiedBy = x.ModifiedBy,
-                    ModifiedTime = x.ModifiedTime,
-                    Version = x.Version,
-                    RecordStatus = x.RecordStatus,
-                    QuestionCount = x.Questions.Where(q => q.RecordStatus == RecordStatusConstant.Active).Count(),
-                    HistoriesCount = x.Histories.Count(),
-                    // check if the current user has taken the quiz
-                    IsTakenByUser = x.Histories.Any(y => y.UserId == userId)
-                })
-                .FirstOrDefaultAsync();
+            Query query = firestoreDb.Collection("quiz")
+                .WhereEqualTo("QuizId", id)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .Limit(1);
 
-            if (quiz is null)
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Documents.Count > 0)
             {
-                throw new KnownException(ErrorMessageConstant.DataNotFound);
+                var quiz = snapshot.Documents[0].ConvertTo<QuizModel>();
+                var quizDto = mapper.Map<QuizDto>(quiz);
+                quizDto.QuestionCount = await GetCollectionCount("question", "QuizId", quiz.QuizId);
+
+                if (quizDto.CategoryId != null)
+                {
+                    quizDto.Category = await categoryRepository.GetDataByIdAsync(quizDto.CategoryId);
+                }
+
+                if (quizDto.UserId != null)
+                {
+                    quizDto.User = await userRepository.GetSimpleUserDtoAsync(quizDto.UserId);
+                }
+
+                if (userId != "")
+                {
+                    quizDto.IsTakenByUser = await CheckIfTaken(quiz.QuizId, userId);
+                }
+
+                return quizDto;
             }
 
-            return quiz;
+            throw new KnownException(ErrorMessageConstant.DataNotFound);
         }
 
         public async Task<TakeQuizDto> TakeQuizByIdAsync(string quizId)
         {
-            QuizModel? quiz = await dBContext.Quiz
-                .Where(x => x.QuizId == quizId && x.RecordStatus == RecordStatusConstant.Active)
-                .Select(MapQuizWithQuestions)
-                .FirstOrDefaultAsync();
+            // 1. Fetch the Quiz Document
+            Query query = firestoreDb.Collection("quiz")
+                .WhereEqualTo("QuizId", quizId)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .Limit(1);
 
-            if (quiz == null)
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Documents.Count == 0)
             {
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
-            // check if user has taken the quiz
-            // if yes, throw
-            if (quiz.Histories.Any(x => x.UserId == userId))
+            var quiz = snapshot.Documents[0].ConvertTo<QuizModel>();
+
+            // 2. Check if user has already taken the quiz (History check)
+            // We query the 'history' collection for a match
+            Query historyQuery = firestoreDb.Collection("quizhistory")
+                .WhereEqualTo("QuizId", quizId)
+                .WhereEqualTo("UserId", userId)
+                .Limit(1);
+
+            QuerySnapshot historySnap = await historyQuery.GetSnapshotAsync();
+            if (historySnap.Documents.Count > 0)
             {
                 throw new KnownException("Anda sudah mengerjakan kuis ini");
             }
 
-            TakeQuizDto quizDto = mapper.Map<TakeQuizDto>(quiz);
+            // 3. Fetch Active Questions for this Quiz
+            Query questionsQuery = firestoreDb.Collection("question")
+                .WhereEqualTo("QuizId", quizId)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .OrderBy("QuestionOrder");
 
-            foreach (var question in quizDto.Questions)
+            QuerySnapshot questionsSnap = await questionsQuery.GetSnapshotAsync();
+            var questions = questionsSnap.Documents.Select(d => d.ConvertTo<QuestionModel>()).ToList();
+
+            // 4. Fetch Answers for each Question
+            // (Note: If you have many questions, consider storing answers as a nested array in the Question document)
+            foreach (var question in questions)
             {
-                question.Answers = question.Answers.OrderBy(x => x.AnswerOrder).ToList();
+                Query answersQuery = firestoreDb.Collection("answer")
+                    .WhereEqualTo("QuestionId", question.QuestionId)
+                    .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                    .OrderBy("AnswerOrder");
+
+                QuerySnapshot answersSnap = await answersQuery.GetSnapshotAsync();
+                question.Answers = answersSnap.Documents.Select(d => d.ConvertTo<AnswerModel>()).ToList();
             }
 
-            quizDto.QuestionCount = quizDto.Questions.Count();
+            // 5. Map to DTO
+            quiz.Questions = questions;
+            TakeQuizDto quizDto = mapper.Map<TakeQuizDto>(quiz);
+            quizDto.QuestionCount = quiz.Questions.Count;
 
             return quizDto;
         }
         
         public async Task<QuizDto> GetQuizWithQuestionsByIdAsync(string quizId)
-        {            
-            QuizModel? quiz = await dBContext.Quiz
-                .Where(x => x.QuizId == quizId && x.RecordStatus == RecordStatusConstant.Active)
-                .Select(MapQuizWithQuestions)
-                .FirstOrDefaultAsync();
+        {
+            // 1. Fetch the Quiz Document
+            Query query = firestoreDb.Collection("quiz")
+                .WhereEqualTo("QuizId", quizId)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .Limit(1);
 
-            if (quiz == null)
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Documents.Count == 0)
             {
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
-            QuizDto quizDto = mapper.Map<QuizDto>(quiz);
+            var quiz = snapshot.Documents[0].ConvertTo<QuizModel>();
 
-            // get category for showing it in edit page
+            // 2. Check if user has already taken the quiz (History check)
+            // We query the 'history' collection for a match
+            Query historyQuery = firestoreDb.Collection("quizhistory")
+                .WhereEqualTo("QuizId", quizId)
+                .WhereEqualTo("UserId", userId)
+                .Limit(1);
+
+            QuerySnapshot historySnap = await historyQuery.GetSnapshotAsync();
+            if (historySnap.Documents.Count > 0)
+            {
+                throw new KnownException("Anda sudah mengerjakan kuis ini");
+            }
+
+            // 3. Fetch Active Questions for this Quiz
+            Query questionsQuery = firestoreDb.Collection("question")
+                .WhereEqualTo("QuizId", quizId)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .OrderBy("QuestionOrder");
+
+            QuerySnapshot questionsSnap = await questionsQuery.GetSnapshotAsync();
+            var questions = questionsSnap.Documents.Select(d => d.ConvertTo<QuestionModel>()).ToList();
+
+            // 4. Fetch Answers for each Question
+            // (Note: If you have many questions, consider storing answers as a nested array in the Question document)
+            foreach (var question in questions)
+            {
+                Query answersQuery = firestoreDb.Collection("answer")
+                    .WhereEqualTo("QuestionId", question.QuestionId)
+                    .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                    .OrderBy("AnswerOrder");
+
+                QuerySnapshot answersSnap = await answersQuery.GetSnapshotAsync();
+                question.Answers = answersSnap.Documents.Select(d => d.ConvertTo<AnswerModel>()).ToList();
+            }
+
+            // 5. Map to DTO
+            quiz.Questions = questions;
+            QuizDto quizDto = mapper.Map<QuizDto>(quiz);
+            quizDto.QuestionCount = quiz.Questions.Count;
+
             if (quizDto.CategoryId != null)
             {
                 quizDto.Category = await categoryRepository.GetDataByIdAsync(quizDto.CategoryId);
@@ -242,66 +356,112 @@ namespace QuizApi.Repositories
 
         public async Task<QuizDto> UpdateDataByIdAsync(string id, QuizDto quizDto)
         {
-            QuizModel? quiz = await dBContext.Quiz
-                .Where(x => x.QuizId == id && x.RecordStatus == RecordStatusConstant.Active)
-                .Select(MapQuizWithQuestions)
-                .FirstOrDefaultAsync();
+            // 1. Fetch the Quiz Document
+            var quizCollection = firestoreDb.Collection("quiz");
+            Query query = quizCollection
+                .WhereEqualTo("QuizId", id)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .Limit(1);
 
-            if (quiz == null)
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Documents.Count == 0)
             {
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
-            if (quiz.UserId != userId)
+            DocumentSnapshot quizDoc = snapshot.Documents[0];
+            var editedQuiz = quizDoc.ConvertTo<QuizModel>();
+
+            if (editedQuiz.UserId != userId)
             {
                 throw new KnownException(ErrorMessageConstant.AccessNotAllowed);
             }
 
+            // 2. Fetch Active Questions for this Quiz
+            Query questionsQuery = firestoreDb.Collection("question")
+                .WhereEqualTo("QuizId", id)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .OrderBy("QuestionOrder");
+
+            QuerySnapshot questionsSnap = await questionsQuery.GetSnapshotAsync();
+            var editedQuestions = questionsSnap.Documents.Select(d => d.ConvertTo<QuestionModel>()).ToList();
+
+            // 3. Fetch Answers for each Question
+            // (Note: If you have many questions, consider storing answers as a nested array in the Question document)
+            foreach (var question in editedQuestions)
+            {
+                Query answersQuery = firestoreDb.Collection("answer")
+                    .WhereEqualTo("QuestionId", question.QuestionId)
+                    .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                    .OrderBy("AnswerOrder");
+
+                QuerySnapshot answersSnap = await answersQuery.GetSnapshotAsync();
+                question.Answers = answersSnap.Documents.Select(d => d.ConvertTo<AnswerModel>()).ToList();
+            }
+
             // update the quiz
-            quiz.CategoryId = quizDto.CategoryId;
-            quiz.Title = quizDto.Title;
-            quiz.ImageUrl = quizDto.ImageUrl;
-            quiz.Time = quizDto.Time ?? 0; // Time is nullable in dto
+            editedQuiz.CategoryId = quizDto.CategoryId;
+            editedQuiz.Title = quizDto.Title;
+            editedQuiz.ImageUrl = quizDto.ImageUrl;
+            editedQuiz.Time = quizDto.Time ?? 0; // Time is nullable in dto
 
-            actionModelHelper.AssignUpdateModel(quiz, userId);
+            actionModelHelper.AssignUpdateModel(editedQuiz, userId);
 
+            // start a batch
+            WriteBatch batch = firestoreDb.StartBatch();
+            
             // update the questions
+            // questionDto is the updated question
+            int questionOrder = 0;
             foreach (var questionDto in quizDto.Questions)
             {
                 // find the question that is about to be updated
-                QuestionModel? question = quiz.Questions.Where(q => q.QuestionId == questionDto.QuestionId).FirstOrDefault();
+                var editedQuestion = editedQuestions.FirstOrDefault(q => q.QuestionId == questionDto.QuestionId);
 
-                // if question is found, update
-                if (question != null)
+                // if question is found in questionDto, update
+                if (editedQuestion != null)
                 {
-                    question.Text = questionDto.Text;
-                    question.ImageUrl = questionDto.ImageUrl;
-                    question.QuestionOrder = questionDto.QuestionOrder;
+                    editedQuestion.Text = questionDto.Text;
+                    editedQuestion.ImageUrl = questionDto.ImageUrl;
+                    editedQuestion.QuestionOrder = questionOrder;
 
-                    actionModelHelper.AssignUpdateModel(question, userId);
+                    actionModelHelper.AssignUpdateModel(editedQuestion, userId);
 
                     // update the answers
+                    int answerOrder = 0;
                     foreach (var answerDto in questionDto.Answers)
                     {
-                        // find the answer that is about to be updated
-                        AnswerModel? answer = question.Answers.Where(a => a.AnswerId == answerDto.AnswerId).FirstOrDefault();
+                        // find the answer that is about to be updated   
+                        AnswerModel? editedAnswer = editedQuestion.Answers.FirstOrDefault(a => a.AnswerId == answerDto.AnswerId);
 
                         // if the answer is found, update
-                        if (answer != null)
+                        if (editedAnswer != null)
                         {
-                            answer.Text = answerDto.Text;
-                            answer.AnswerOrder = answerDto.AnswerOrder;
-                            answer.ImageUrl = answerDto.ImageUrl;
-                            answer.IsTrueAnswer = answerDto.IsTrueAnswer;
+                            editedAnswer.Text = answerDto.Text;
+                            editedAnswer.ImageUrl = answerDto.ImageUrl;
+                            editedAnswer.IsTrueAnswer = answerDto.IsTrueAnswer;
+                            editedAnswer.AnswerOrder = answerOrder;
 
-                            actionModelHelper.AssignUpdateModel(answer, userId);
+                            actionModelHelper.AssignUpdateModel(editedAnswer, userId);
+
+                            // save the updated answer
+                            var answerDocument = firestoreDb.Collection("answer");
+                            Query answerQuery = answerDocument
+                                .WhereEqualTo("AnswerId", answerDto.AnswerId)
+                                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                                .Limit(1);
+                            QuerySnapshot answerSnapshot = await answerQuery.GetSnapshotAsync();
+                            DocumentSnapshot answerDoc = answerSnapshot.Documents[0];
+                            batch.Set(answerDoc.Reference, editedAnswer); // Overwrites the doc with the updated model
                         }
                         // if the answer is not found
                         // answerDto is a new answer, add
                         else
                         {
                             AnswerModel newAnswer = mapper.Map<AnswerModel>(answerDto);
-                            newAnswer.QuestionId = question.QuestionId;
+                            newAnswer.QuestionId = editedQuestion.QuestionId;
+                            newAnswer.AnswerOrder = answerOrder;
 
                             actionModelHelper.AssignCreateModel(newAnswer, "Answer", userId);
 
@@ -310,73 +470,119 @@ namespace QuizApi.Repositories
                             // question.Answers.Add(newAnswer);
 
                             // add
-                            await dBContext.AddAsync(newAnswer);
+                            await firestoreDb.Collection("answer").AddAsync(newAnswer);
                         }
+
+                        answerOrder++;
                     }
 
                     // check old answers that dont exist in questionDto
-                    foreach (var answer in question.Answers)
-                    {
-                        AnswerDto? answerDto = questionDto.Answers.Where(x => x.AnswerId == answer.AnswerId).FirstOrDefault();
+                    foreach (var oldAnswer in editedQuestion.Answers)
+                    {   
+                        AnswerModel? editedAnswer = mapper.Map<AnswerModel>(questionDto.Answers.FirstOrDefault(a => a.AnswerId == oldAnswer.AnswerId));
 
                         // if answer is not found in questionDto
                         // delete
-                        if (answerDto == null)
+                        if (editedAnswer == null)
                         {
-                            actionModelHelper.AssignDeleteModel(answer, userId);
+                            actionModelHelper.AssignDeleteModel(oldAnswer, userId);
+
+                            var answerDocument = firestoreDb.Collection("answer");
+                            Query answerQuery = answerDocument
+                                .WhereEqualTo("AnswerId", oldAnswer.AnswerId)
+                                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                                .Limit(1);
+                            QuerySnapshot answerSnapshot = await answerQuery.GetSnapshotAsync();
+                            DocumentSnapshot answerDoc = answerSnapshot.Documents[0];
+                            batch.Set(answerDoc.Reference, oldAnswer); // Overwrites the doc with the updated model
                         }
                     }
+
+                    // save the updated question
+                    var questionDocument = firestoreDb.Collection("question");
+                    Query questionQuery = questionDocument
+                        .WhereEqualTo("QuestionId", questionDto.QuestionId)
+                        .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                        .Limit(1);
+                    QuerySnapshot questionSnapshot = await questionQuery.GetSnapshotAsync();
+                    DocumentSnapshot questionDoc = questionSnapshot.Documents[0];
+                    batch.Set(questionDoc.Reference, editedQuestion); // Overwrites the doc with the updated model
                 }
                 // if the question is not found
                 // add
                 else
                 {
                     QuestionModel newQuestion = mapper.Map<QuestionModel>(questionDto);
-                    newQuestion.QuizId = quiz.QuizId;
+                    newQuestion.QuizId = editedQuiz.QuizId;
+                    newQuestion.QuestionOrder = questionOrder;
 
                     actionModelHelper.AssignCreateModel(newQuestion, "Question", userId);
 
                     // create the answers
+                    int answerOrder = 0;
                     foreach (var answer in newQuestion.Answers)
                     {
                         answer.QuestionId = newQuestion.QuestionId;
+                        answer.AnswerOrder = answerOrder;
                         actionModelHelper.AssignCreateModel(answer, "Answer", userId);
+
+                        await firestoreDb.Collection("answer").AddAsync(answer);
                     }
 
                     // insert to quiz
                     // quiz.Questions.Add(newQuestion);
 
-                    await dBContext.AddAsync(newQuestion);
+                    await firestoreDb.Collection("question").AddAsync(newQuestion);
                 }
+
+                questionOrder++;
             }
 
             // check old questions that dont exist in quizDto
-            foreach (var question in quiz.Questions)
-            {
-                QuestionDto? questionDto = quizDto.Questions.Where(q => q.QuestionId == question.QuestionId).FirstOrDefault();
+            foreach (var oldQuestion in editedQuestions)
+            {   
+                QuestionModel? editedQuestion = mapper.Map<QuestionModel>(quizDto.Questions.FirstOrDefault(q => q.QuestionId == oldQuestion.QuestionId));
 
                 // if old question is not found in quizDto
                 // delete
-                if (questionDto == null)
+                if (editedQuestion == null)
                 {
-                    actionModelHelper.AssignDeleteModel(question, userId);
+                    actionModelHelper.AssignDeleteModel(oldQuestion, userId);
+                    var questionDocument = firestoreDb.Collection("question");
+                    Query questionQuery = questionDocument
+                        .WhereEqualTo("QuestionId", oldQuestion.QuestionId)
+                        .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                        .Limit(1);
+                    QuerySnapshot questionSnapshot = await questionQuery.GetSnapshotAsync();
+                    DocumentSnapshot questionDoc = questionSnapshot.Documents[0];
+
+                    batch.Set(questionDoc.Reference, oldQuestion); // Overwrites the doc with the updated model
                 }
             }
 
-            dBContext.Update(quiz);
-            await dBContext.SaveChangesAsync();
+            batch.Set(quizDoc.Reference, editedQuiz); // Overwrites the doc with the updated model
+            await batch.CommitAsync();
 
-            return mapper.Map<QuizDto>(quiz);
+            return mapper.Map<QuizDto>(editedQuiz);
         }
 
         public async Task DeleteDataAsync(string id)
         {
-            QuizModel? quiz = await dBContext.Quiz.Where(x => x.QuizId == id && x.RecordStatus == RecordStatusConstant.Active).FirstOrDefaultAsync();
+            // Find the document
+            var quizCollection = firestoreDb.Collection("quiz");
+            Query query = quizCollection
+                .WhereEqualTo("QuizId", id)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .Limit(1);
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
 
-            if (quiz is null)
+            if (snapshot.Documents.Count == 0)
             {
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
+
+            DocumentSnapshot targetDoc = snapshot.Documents[0];
+            QuizModel quiz = snapshot.Documents[0].ConvertTo<QuizModel>();
 
             // only creator of the quiz can remove the quiz
             if (quiz.UserId != userId)
@@ -384,10 +590,12 @@ namespace QuizApi.Repositories
                 throw new KnownException("Anda tidak diizinkan mengakses fitur ini");
             }
 
+            WriteBatch batch = firestoreDb.StartBatch();
+
             actionModelHelper.AssignDeleteModel(quiz, userId);
 
-            dBContext.Update(quiz);
-            await dBContext.SaveChangesAsync();
+            batch.Set(targetDoc.Reference, quiz); // Overwrites the doc with the updated model
+            await batch.CommitAsync();
         }
 
         public async Task<QuizHistoryModel> CheckQuizAsync(CheckQuizDto checkQuizDto, string quizId)
@@ -457,7 +665,7 @@ namespace QuizApi.Repositories
             quizHistory.QuizVersion = checkQuizDto.QuizVersion;
             quizHistory.Duration = checkQuizDto.Duration;
             quizHistory.QuestionCount = checkQuizDto.QuestionCount;
-            quizHistory.TrueAnswers = quizHistory.Questions.Where(x => x.IsAnswerTrue).Count();
+            quizHistory.TrueAnswers = quizHistory.Questions.Count(x => x.IsAnswerTrue);
             quizHistory.WrongAnswers = quizHistory.QuestionCount - quizHistory.TrueAnswers;
             quizHistory.Score = (int)Math.Round((double)quizHistory.TrueAnswers / quizHistory.QuestionCount * 100);
 
@@ -525,10 +733,12 @@ namespace QuizApi.Repositories
             }
             #endregion
 
-            var response = new SearchResponse();
-            response.TotalItems = await listQuizHistoriesQuery.CountAsync();
-            response.CurrentPage = searchRequest.CurrentPage;
-            response.PageSize = searchRequest.PageSize;
+            var response = new SearchResponse
+            {
+                TotalItems = await listQuizHistoriesQuery.CountAsync(),
+                CurrentPage = searchRequest.CurrentPage,
+                PageSize = searchRequest.PageSize
+            };
 
             var skip = searchRequest.PageSize * searchRequest.CurrentPage;
             var take = searchRequest.PageSize;

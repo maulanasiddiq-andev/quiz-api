@@ -12,22 +12,27 @@ using QuizApi.Responses;
 using QuizApi.DTOs.Quiz;
 using QuizApi.Models.QuizHistory;
 using QuizApi.DTOs.QuizHistory;
+using Google.Cloud.Firestore;
 
 namespace QuizApi.Repositories
 {
     public class UserRepository
     {
+        private readonly FirestoreDb firestoreDb;
+        private readonly string CollectionName = "user";
         private readonly QuizAppDBContext dBContext;
         private readonly IMapper mapper;
         private readonly ActionModelHelper actionModelHelper;
         private readonly string userId = "";
         // private readonly string tableName = "User";
         public UserRepository(
+            [FromKeyedServices("quiz-db")] FirestoreDb firestoreDb,
             QuizAppDBContext dBContext,
             IMapper mapper,
             IHttpContextAccessor httpContextAccessor
         )
         {
+            this.firestoreDb = firestoreDb;
             this.dBContext = dBContext;
             this.mapper = mapper;
             actionModelHelper = new ActionModelHelper();
@@ -40,44 +45,48 @@ namespace QuizApi.Repositories
 
         public async Task<SearchResponse> SearchDatasAsync(SearchRequestDto searchRequest)
         {
-            IQueryable<UserModel> listUserQuery = dBContext.User
-                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId != userId)
-                .AsQueryable();
+            // 1. Reference the collection
+            CollectionReference usersRef = firestoreDb.Collection(CollectionName);
 
-            #region Query
+            // 2. Build the Query (Filtering)
+            // Note: Firestore doesn't support 'ILike' natively. 
+            // For simple "Starts With" you can use >= and <. 
+            // For full-text search, Google recommends Algolia or ElasticSearch.
+            Query query = usersRef.WhereEqualTo("RecordStatus", RecordStatusConstant.Active);
+
+            // 3. Ordering
+            string orderByField = searchRequest.OrderBy == "createdTime" ? "CreatedTime" : "Name";
+            if (searchRequest.OrderDir == "desc")
+                query = query.OrderByDescending(orderByField);
+            else
+                query = query.OrderBy(orderByField);
+
+            // 4. Execution & Pagination
+            // Firestore pagination uses "StartAfter". For simple Offset, we use Limit/Offset.
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+            
+            // Manual filtering for "Not equal to current user" and "Search string" 
+            // (Firestore has limits on mixing multiple inequality filters)
+            var allDocs = snapshot.Documents
+                .Select(d => d.ConvertTo<UserModel>())
+                .Where(u => u.UserId != userId);
+
             if (!string.IsNullOrWhiteSpace(searchRequest.Search))
             {
-                listUserQuery = listUserQuery.Where(x => EF.Functions.ILike(x.Name, $"%{searchRequest.Search}%"));
+                allDocs = allDocs.Where(u => u.Name.Contains(searchRequest.Search, StringComparison.OrdinalIgnoreCase));
             }
-            #endregion
 
-            #region Ordering
-            string orderBy = searchRequest.OrderBy;
-            string orderDir = searchRequest.OrderDir;
-
-            if (orderBy.Equals("createdTime"))
+            var response = new SearchResponse
             {
-                if (orderDir.Equals("asc"))
-                {
-                    listUserQuery = listUserQuery.OrderBy(x => x.CreatedTime).AsQueryable();
-                }
-                else if (orderDir.Equals("desc"))
-                {
-                    listUserQuery = listUserQuery.OrderByDescending(x => x.CreatedTime).AsQueryable();
-                }
-            }
-            #endregion
-
-            var response = new SearchResponse();
-            response.TotalItems = await listUserQuery.CountAsync();
-            response.CurrentPage = searchRequest.CurrentPage;
-            response.PageSize = searchRequest.PageSize;
+                TotalItems = allDocs.Count(),
+                CurrentPage = searchRequest.CurrentPage,
+                PageSize = searchRequest.PageSize
+            };
 
             var skip = searchRequest.PageSize * searchRequest.CurrentPage;
-            var take = searchRequest.PageSize;
-            var listUser = await listUserQuery.Skip(skip).Take(take).ToListAsync();
+            var pagedList = allDocs.Skip(skip).Take(searchRequest.PageSize).ToList();
 
-            response.Items = mapper.Map<List<UserDto>>(listUser);
+            response.Items = mapper.Map<List<UserDto>>(pagedList);
 
             return response;
         }
@@ -148,48 +157,48 @@ namespace QuizApi.Repositories
             return simpleUser;
         }
 
-        public async Task<SearchResponse> GetQuizzesByUserIdAsync(string id, SearchRequestDto searchRequest)
-        {
-            IQueryable<QuizDto> listQuizzesQuery = dBContext.Quiz
-                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == id)
-                .Select(x => new QuizDto
-                {
-                    QuizId = x.QuizId,
-                    Title = x.Title,
-                    Description = x.Description,
-                    ImageUrl = x.ImageUrl,
-                    CategoryId = x.CategoryId,
-                    Category = mapper.Map<CategoryDto>(x.Category),
-                    Time = x.Time,
-                    UserId = x.UserId,
-                    CreatedBy = x.CreatedBy,
-                    CreatedTime = x.CreatedTime,
-                    ModifiedBy = x.ModifiedBy,
-                    ModifiedTime = x.ModifiedTime,
-                    Version = x.Version,
-                    RecordStatus = x.RecordStatus,
-                    QuestionCount = x.Questions.Count(q => q.RecordStatus == RecordStatusConstant.Active),
-                    HistoriesCount = x.Histories.Count(),
-                    // check if the current user has taken the quiz
-                    IsTakenByUser = x.Histories.Any(y => y.UserId == userId)
-                });
+        // public async Task<SearchResponse> GetQuizzesByUserIdAsync(string id, SearchRequestDto searchRequest)
+        // {
+        //     IQueryable<QuizDto> listQuizzesQuery = dBContext.Quiz
+        //         .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == id)
+        //         .Select(x => new QuizDto
+        //         {
+        //             QuizId = x.QuizId,
+        //             Title = x.Title,
+        //             Description = x.Description,
+        //             ImageUrl = x.ImageUrl,
+        //             CategoryId = x.CategoryId,
+        //             Category = mapper.Map<CategoryDto>(x.Category),
+        //             Time = x.Time,
+        //             UserId = x.UserId,
+        //             CreatedBy = x.CreatedBy,
+        //             CreatedTime = x.CreatedTime,
+        //             ModifiedBy = x.ModifiedBy,
+        //             ModifiedTime = x.ModifiedTime,
+        //             Version = x.Version,
+        //             RecordStatus = x.RecordStatus,
+        //             QuestionCount = x.Questions.Count(q => q.RecordStatus == RecordStatusConstant.Active),
+        //             HistoriesCount = x.Histories.Count(),
+        //             // check if the current user has taken the quiz
+        //             IsTakenByUser = x.Histories.Any(y => y.UserId == userId)
+        //         });
 
-            // sorting
-            listQuizzesQuery = listQuizzesQuery.OrderByDescending(x => x.CreatedTime);
+        //     // sorting
+        //     listQuizzesQuery = listQuizzesQuery.OrderByDescending(x => x.CreatedTime);
 
-            var response = new SearchResponse();
-            response.TotalItems = await listQuizzesQuery.CountAsync();
-            response.CurrentPage = searchRequest.CurrentPage;
-            response.PageSize = searchRequest.PageSize;
+        //     var response = new SearchResponse();
+        //     response.TotalItems = await listQuizzesQuery.CountAsync();
+        //     response.CurrentPage = searchRequest.CurrentPage;
+        //     response.PageSize = searchRequest.PageSize;
 
-            var skip = searchRequest.PageSize * searchRequest.CurrentPage;
-            var take = searchRequest.PageSize;
-            var listQuiz = await listQuizzesQuery.Skip(skip).Take(take).ToListAsync();
+        //     var skip = searchRequest.PageSize * searchRequest.CurrentPage;
+        //     var take = searchRequest.PageSize;
+        //     var listQuiz = await listQuizzesQuery.Skip(skip).Take(take).ToListAsync();
 
-            response.Items = listQuiz;
+        //     response.Items = listQuiz;
 
-            return response;
-        }
+        //     return response;
+        // }
 
         public async Task<SearchResponse> GetHistoriesByUserIdAsync(string id, SearchRequestDto searchRequest)
         {
@@ -216,46 +225,46 @@ namespace QuizApi.Repositories
             return response;
         }
 
-        public async Task<SearchResponse> GetSelfQuizzesAsync(SearchRequestDto searchRequest)
-        {
-            IQueryable<QuizDto> listQuizzesQuery = dBContext.Quiz
-                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == userId)
-                .Select(x => new QuizDto
-                {
-                    QuizId = x.QuizId,
-                    Title = x.Title,
-                    Description = x.Description,
-                    ImageUrl = x.ImageUrl,
-                    CategoryId = x.CategoryId,
-                    Category = mapper.Map<CategoryDto>(x.Category),
-                    Time = x.Time,
-                    UserId = x.UserId,
-                    CreatedBy = x.CreatedBy,
-                    CreatedTime = x.CreatedTime,
-                    ModifiedBy = x.ModifiedBy,
-                    ModifiedTime = x.ModifiedTime,
-                    Version = x.Version,
-                    RecordStatus = x.RecordStatus,
-                    QuestionCount = x.Questions.Count(q => q.RecordStatus == RecordStatusConstant.Active),
-                    HistoriesCount = x.Histories.Count()
-                });
+        // public async Task<SearchResponse> GetSelfQuizzesAsync(SearchRequestDto searchRequest)
+        // {
+        //     IQueryable<QuizDto> listQuizzesQuery = dBContext.Quiz
+        //         .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == userId)
+        //         .Select(x => new QuizDto
+        //         {
+        //             QuizId = x.QuizId,
+        //             Title = x.Title,
+        //             Description = x.Description,
+        //             ImageUrl = x.ImageUrl,
+        //             CategoryId = x.CategoryId,
+        //             Category = mapper.Map<CategoryDto>(x.Category),
+        //             Time = x.Time,
+        //             UserId = x.UserId,
+        //             CreatedBy = x.CreatedBy,
+        //             CreatedTime = x.CreatedTime,
+        //             ModifiedBy = x.ModifiedBy,
+        //             ModifiedTime = x.ModifiedTime,
+        //             Version = x.Version,
+        //             RecordStatus = x.RecordStatus,
+        //             QuestionCount = x.Questions.Count(q => q.RecordStatus == RecordStatusConstant.Active),
+        //             HistoriesCount = x.Histories.Count()
+        //         });
 
-            // sorting
-            listQuizzesQuery = listQuizzesQuery.OrderByDescending(x => x.CreatedTime);
+        //     // sorting
+        //     listQuizzesQuery = listQuizzesQuery.OrderByDescending(x => x.CreatedTime);
 
-            var response = new SearchResponse();
-            response.TotalItems = await listQuizzesQuery.CountAsync();
-            response.CurrentPage = searchRequest.CurrentPage;
-            response.PageSize = searchRequest.PageSize;
+        //     var response = new SearchResponse();
+        //     response.TotalItems = await listQuizzesQuery.CountAsync();
+        //     response.CurrentPage = searchRequest.CurrentPage;
+        //     response.PageSize = searchRequest.PageSize;
 
-            var skip = searchRequest.PageSize * searchRequest.CurrentPage;
-            var take = searchRequest.PageSize;
-            var listQuiz = await listQuizzesQuery.Skip(skip).Take(take).ToListAsync();
+        //     var skip = searchRequest.PageSize * searchRequest.CurrentPage;
+        //     var take = searchRequest.PageSize;
+        //     var listQuiz = await listQuizzesQuery.Skip(skip).Take(take).ToListAsync();
 
-            response.Items = listQuiz;
+        //     response.Items = listQuiz;
 
-            return response;
-        }
+        //     return response;
+        // }
 
         public async Task<SearchResponse> GetSelfHistoriesAsync(SearchRequestDto searchRequest)
         {
@@ -302,10 +311,19 @@ namespace QuizApi.Repositories
         
         private async Task<UserModel?> GetActiveUserByIdAsync(string id)
         {
-            return await dBContext.User
-                .Where(x => x.UserId.Equals(id) && x.RecordStatus == RecordStatusConstant.Active)
-                .Include(x => x.Role)
-                .FirstOrDefaultAsync();
+            Query query = firestoreDb.Collection("user")
+                .WhereEqualTo("UserId", id)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .Limit(1);
+
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Documents.Count > 0)
+            {
+                return snapshot.Documents[0].ConvertTo<UserModel>();
+            }
+
+            return null;
         }
     }
 }
