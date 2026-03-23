@@ -11,10 +11,16 @@ using QuizApi.Services;
 using QuizApi.Settings;
 using RabbitMQ.Client;
 
-var path = Path.Combine(Directory.GetCurrentDirectory(), "serviceAccountKey.json");
-Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", path);
-
 var builder = WebApplication.CreateBuilder(args);
+
+if (builder.Environment.IsDevelopment())
+{
+    var path = Path.Combine(Directory.GetCurrentDirectory(), "serviceAccountKey.json");
+    if (File.Exists(path))
+    {
+        Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", path);
+    }    
+}
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -111,7 +117,7 @@ builder.Services.AddKeyedSingleton("quiz-db", (sp, key) =>
 {
     return new FirestoreDbBuilder
     {
-        ProjectId = builder.Configuration["GoogleSetting:ProjectId"] ?? "compact-orb-472513-j5",
+        ProjectId = builder.Configuration["GoogleSetting:ProjectId"],
         DatabaseId = "quiz-db"
     }.Build();
 });
