@@ -23,7 +23,7 @@ namespace QuizApi.Extensions
             collection.AddScoped<PushNotificationService>();
 
             // queue service
-            collection.AddSingleton<QueueService>();
+            // collection.AddSingleton<QueueService>();
 
             // services
             collection.AddScoped<EmailService>();
