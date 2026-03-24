@@ -30,7 +30,6 @@ builder.Services.AddCors(options => {
               .AllowAnyMethod();
     });
 });
-app.UseCors();
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -193,6 +192,8 @@ if (app.Environment.IsDevelopment())
 // app.UseHttpsRedirection();
 
 app.MapControllers();
+
+app.UseCors();
 
 app.UseAuthentication();
 app.UseAuthorization();
