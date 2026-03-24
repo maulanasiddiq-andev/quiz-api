@@ -30,7 +30,7 @@ namespace QuizApi.Repositories
         private readonly ActionModelHelper actionModelHelper;
         // for updating quiz
         private readonly CategoryRepository categoryRepository;
-        private readonly QueueService queueService;
+        // private readonly QueueService queueService;
         private readonly UserRepository userRepository;
         public QuizRepository(
             [FromKeyedServices("quiz-db")] FirestoreDb firestoreDb,
@@ -38,7 +38,7 @@ namespace QuizApi.Repositories
             IMapper mapper,
             IHttpContextAccessor httpContextAccessor,
             CategoryRepository categoryRepository,
-            QueueService queueService,
+            // QueueService queueService,
             UserRepository userRepository
         )
         {
@@ -46,7 +46,7 @@ namespace QuizApi.Repositories
             this.dBContext = dBContext;
             this.mapper = mapper;
             this.categoryRepository = categoryRepository;
-            this.queueService = queueService;
+            // this.queueService = queueService;
             this.userRepository = userRepository;
             actionModelHelper = new ActionModelHelper();
 
@@ -689,7 +689,7 @@ namespace QuizApi.Repositories
                         Body = $"{quizTaker.Name} telah mengerjakan kuis Anda: {quiz.Title}"
                     };
 
-                    await queueService.Publish(QueueConstant.NotificationQueue, notificationQueue);   
+                    // await queueService.Publish(QueueConstant.NotificationQueue, notificationQueue);   
                 }
             }
 
