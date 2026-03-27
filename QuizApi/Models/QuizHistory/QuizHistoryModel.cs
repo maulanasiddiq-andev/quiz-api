@@ -1,9 +1,10 @@
-using System.ComponentModel.DataAnnotations;
+using Google.Cloud.Firestore;
 using QuizApi.Models.Identity;
 using QuizApi.Models.Quiz;
 
 namespace QuizApi.Models.QuizHistory
 {
+    [FirestoreData]
     public class QuizHistoryModel : BaseModel
     {
         public QuizHistoryModel()
@@ -11,21 +12,32 @@ namespace QuizApi.Models.QuizHistory
             Questions = new List<QuestionHistoryModel>();
         }
 
-        [Key]
+        [FirestoreProperty]
         public string QuizHistoryId { get; set; } = string.Empty;
+        [FirestoreProperty]
         public string QuizId { get; set; } = string.Empty;
         public QuizModel? Quiz { get; set; }
+        [FirestoreProperty]
         public string Title { get; set; } = string.Empty;
+        [FirestoreProperty]
         public string? ImageUrl { get; set; }
+        [FirestoreProperty]
         public int Time { get; set; }
-        public uint QuizVersion { get; set; }
+        [FirestoreProperty]
+        public Timestamp QuizVersion { get; set; }
+        [FirestoreProperty]
         public string UserId { get; set; } = string.Empty;
         public UserModel? User { get; set; }
         public List<QuestionHistoryModel> Questions { get; set; }
-        public int QuestionCount { get; set; }        
-        public int Duration { get; set; }        
-        public int TrueAnswers { get; set; }        
-        public int WrongAnswers { get; set; }        
+        [FirestoreProperty]
+        public int QuestionCount { get; set; }
+        [FirestoreProperty]        
+        public int Duration { get; set; }
+        [FirestoreProperty]        
+        public int TrueAnswers { get; set; }
+        [FirestoreProperty]        
+        public int WrongAnswers { get; set; }
+        [FirestoreProperty]        
         public int Score { get; set; }  
     }
 }

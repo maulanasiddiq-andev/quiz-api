@@ -1,3 +1,4 @@
+using Google.Cloud.Firestore;
 using QuizApi.DTOs.Identity;
 using QuizApi.DTOs.Quiz;
 
@@ -15,7 +16,7 @@ namespace QuizApi.DTOs.QuizHistory
         public string Title { get; set; } = string.Empty;
         public string? ImageUrl { get; set; }
         public int Time { get; set; }
-        public uint QuizVersion { get; set; }
+        public Timestamp QuizVersion { get; set; }
         public string UserId { get; set; } = string.Empty;
         public UserDto? User { get; set; }
         public List<QuestionHistoryDto> Questions { get; set; }
