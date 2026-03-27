@@ -1,5 +1,4 @@
 using AutoMapper;
-using Microsoft.EntityFrameworkCore;
 using QuizApi.Constants;
 using QuizApi.DTOs.Identity;
 using QuizApi.DTOs.Request;
@@ -9,10 +8,10 @@ using QuizApi.Helpers;
 using QuizApi.Models;
 using QuizApi.Models.Identity;
 using QuizApi.Responses;
-using QuizApi.DTOs.Quiz;
 using QuizApi.Models.QuizHistory;
 using QuizApi.DTOs.QuizHistory;
 using Google.Cloud.Firestore;
+using QuizApi.Models.Quiz;
 
 namespace QuizApi.Repositories
 {
@@ -107,14 +106,21 @@ namespace QuizApi.Repositories
 
         public async Task UpdateDataAsync(string id, UserDto userDto)
         {
-            UserModel? user = await dBContext.User
-                .Where(x => x.UserId.Equals(id) && x.RecordStatus == RecordStatusConstant.Active)
-                .FirstOrDefaultAsync();;
+            Query query = firestoreDb.Collection("user")
+                .WhereEqualTo("UserId", id)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .Limit(1);
 
-            if (user is null)
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Documents.Count == 0)
             {
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
+
+            DocumentSnapshot doc = snapshot.Documents[0];
+            UserModel user = doc.ConvertTo<UserModel>();
+            WriteBatch batch = firestoreDb.StartBatch();
 
             user.Name = userDto.Name;
             user.Email = userDto.Email;
@@ -124,23 +130,33 @@ namespace QuizApi.Repositories
 
             actionModelHelper.AssignUpdateModel(user, userId);            
 
-            dBContext.Update(user);
-            await dBContext.SaveChangesAsync();
+            batch.Set(doc.Reference, user);
+            await batch.CommitAsync();
         }
 
         public async Task DeleteDataAsync(string id)
         {
-            UserModel? user = await GetActiveUserByIdAsync(id);
+            Query query = firestoreDb.Collection("user")
+                .WhereEqualTo("UserId", id)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .Limit(1);
 
-            if (user is null)
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Documents.Count == 0)
             {
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
+            DocumentSnapshot doc = snapshot.Documents[0];
+            UserModel user = doc.ConvertTo<UserModel>();
+
+            WriteBatch batch = firestoreDb.StartBatch();
+
             actionModelHelper.AssignDeleteModel(user, userId);
 
-            dBContext.Update(user);
-            await dBContext.SaveChangesAsync();
+            batch.Set(doc.Reference, user);
+            await batch.CommitAsync();
         }
 
         public async Task<SimpleUserDto> GetSimpleUserDtoAsync(string id)
@@ -202,27 +218,73 @@ namespace QuizApi.Repositories
 
         public async Task<SearchResponse> GetHistoriesByUserIdAsync(string id, SearchRequestDto searchRequest)
         {
-            IQueryable<QuizHistoryModel> listQuizHistoriesQuery = dBContext.QuizHistory
-                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == id)
-                .Include(x => x.User)
-                .Include(x => x.Quiz)
-                .AsQueryable();
+            // 1. Setup Collection Reference
+            CollectionReference collection = firestoreDb.Collection("quizhistory");
 
-            // sorting
-            listQuizHistoriesQuery = listQuizHistoriesQuery.OrderByDescending(x => x.CreatedTime);
+            // 2. Build the Query
+            // Filter by Active status and the specific User ID
+            Query query = collection
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .WhereEqualTo("UserId", id)
+                .OrderByDescending("CreatedTime");
 
-            var response = new SearchResponse();
-            response.TotalItems = await listQuizHistoriesQuery.CountAsync();
-            response.CurrentPage = searchRequest.CurrentPage;
-            response.PageSize = searchRequest.PageSize;
+            // 3. Get Total Count for metadata
+            AggregateQuery countQuery = query.Count();
+            AggregateQuerySnapshot countSnapshot = await countQuery.GetSnapshotAsync();
+            int totalItems = (int)(countSnapshot.Count ?? 0);
 
-            var skip = searchRequest.PageSize * searchRequest.CurrentPage;
-            var take = searchRequest.PageSize;
-            var listQuizHistories = await listQuizHistoriesQuery.Skip(skip).Take(take).ToListAsync();
+            // 4. Apply Pagination
+            int skip = searchRequest.PageSize * searchRequest.CurrentPage;
+            int take = searchRequest.PageSize;
 
-            response.Items = mapper.Map<List<QuizHistoryDto>>(listQuizHistories);
+            Query pagedQuery = query.Offset(skip).Limit(take);
+            QuerySnapshot querySnapshot = await pagedQuery.GetSnapshotAsync();
 
-            return response;
+            // 5. Convert Documents to Models
+            var listQuizHistories = querySnapshot.Documents
+                .Select(doc => doc.ConvertTo<QuizHistoryModel>())
+                .ToList();
+
+            foreach (var history in listQuizHistories)
+            {
+                if (history.UserId != null)
+                {
+                    Query userQuery = firestoreDb.Collection("user")
+                        .WhereEqualTo("UserId", history.UserId)
+                        .Limit(1);
+
+                    QuerySnapshot snapshot = await userQuery.GetSnapshotAsync();
+
+                    if (snapshot.Documents.Count > 0)
+                    {
+                        UserModel user = snapshot.Documents[0].ConvertTo<UserModel>();
+                        history.User = user;
+                    }
+                }
+
+                if (history.QuizId != null)
+                {
+                    Query quizQuery = firestoreDb.Collection("quiz")
+                        .WhereEqualTo("QuizId", history.QuizId)
+                        .Limit(1);
+
+                    QuerySnapshot snapshot = await quizQuery.GetSnapshotAsync();
+
+                    if (snapshot.Documents.Count > 0)
+                    {
+                        QuizModel quiz = snapshot.Documents[0].ConvertTo<QuizModel>();
+                        history.Quiz = quiz;
+                    }
+                }
+            }
+
+            return new SearchResponse
+            {
+                TotalItems = totalItems,
+                CurrentPage = searchRequest.CurrentPage,
+                PageSize = searchRequest.PageSize,
+                Items = mapper.Map<List<QuizHistoryDto>>(listQuizHistories)
+            };
         }
 
         // public async Task<SearchResponse> GetSelfQuizzesAsync(SearchRequestDto searchRequest)
@@ -268,43 +330,85 @@ namespace QuizApi.Repositories
 
         public async Task<SearchResponse> GetSelfHistoriesAsync(SearchRequestDto searchRequest)
         {
-            IQueryable<QuizHistoryModel> listQuizHistoriesQuery = dBContext.QuizHistory
-                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == userId)
-                .Include(x => x.User)
-                .Include(x => x.Quiz)
-                .AsQueryable();
+            // 1. Setup Collection Reference
+            CollectionReference collection = firestoreDb.Collection("quizhistory");
 
-            // sorting
-            listQuizHistoriesQuery = listQuizHistoriesQuery.OrderByDescending(x => x.CreatedTime);
+            // 2. Build the Query
+            // Filter by Active status and the specific User ID
+            Query query = collection
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active)
+                .WhereEqualTo("UserId", userId)
+                .OrderByDescending("CreatedTime");
 
-            var response = new SearchResponse();
-            response.TotalItems = await listQuizHistoriesQuery.CountAsync();
-            response.CurrentPage = searchRequest.CurrentPage;
-            response.PageSize = searchRequest.PageSize;
+            // 3. Get Total Count for metadata
+            AggregateQuery countQuery = query.Count();
+            AggregateQuerySnapshot countSnapshot = await countQuery.GetSnapshotAsync();
+            int totalItems = (int)(countSnapshot.Count ?? 0);
 
-            var skip = searchRequest.PageSize * searchRequest.CurrentPage;
-            var take = searchRequest.PageSize;
-            var listQuizHistories = await listQuizHistoriesQuery.Skip(skip).Take(take).ToListAsync();
+            // 4. Apply Pagination
+            int skip = searchRequest.PageSize * searchRequest.CurrentPage;
+            int take = searchRequest.PageSize;
 
-            response.Items = mapper.Map<List<QuizHistoryDto>>(listQuizHistories);
+            Query pagedQuery = query.Offset(skip).Limit(take);
+            QuerySnapshot querySnapshot = await pagedQuery.GetSnapshotAsync();
 
-            return response;
+            // 5. Convert Documents to Models
+            var listQuizHistories = querySnapshot.Documents
+                .Select(doc => doc.ConvertTo<QuizHistoryModel>())
+                .ToList();
+
+            foreach (var history in listQuizHistories)
+            {
+                if (history.UserId != null)
+                {
+                    Query userQuery = firestoreDb.Collection("user")
+                        .WhereEqualTo("UserId", history.UserId)
+                        .Limit(1);
+
+                    QuerySnapshot snapshot = await userQuery.GetSnapshotAsync();
+
+                    if (snapshot.Documents.Count > 0)
+                    {
+                        UserModel user = snapshot.Documents[0].ConvertTo<UserModel>();
+                        history.User = user;
+                    }
+                }
+
+                if (history.QuizId != null)
+                {
+                    Query quizQuery = firestoreDb.Collection("quiz")
+                        .WhereEqualTo("QuizId", history.QuizId)
+                        .Limit(1);
+
+                    QuerySnapshot snapshot = await quizQuery.GetSnapshotAsync();
+
+                    if (snapshot.Documents.Count > 0)
+                    {
+                        QuizModel quiz = snapshot.Documents[0].ConvertTo<QuizModel>();
+                        history.Quiz = quiz;
+                    }
+                }
+            }
+
+            return new SearchResponse
+            {
+                TotalItems = totalItems,
+                CurrentPage = searchRequest.CurrentPage,
+                PageSize = searchRequest.PageSize,
+                Items = mapper.Map<List<QuizHistoryDto>>(listQuizHistories)
+            };
         }
 
         public async Task<int> GetSelfQuizCountAsync()
         {
-            int quizCount = await dBContext.Quiz
-                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == userId)
-                .CountAsync();
+            int quizCount = await GetCollectionCount("quiz", "UserId", userId);
 
             return quizCount;
         }
 
         public async Task<int> GetSelfHistoryCountAsync()
         {
-            int historyCount = await dBContext.QuizHistory
-                .Where(x => x.RecordStatus == RecordStatusConstant.Active && x.UserId == userId)
-                .CountAsync();
+            int historyCount = await GetCollectionCount("quizhistory", "UserId", userId);
 
             return historyCount;
         }
@@ -324,6 +428,16 @@ namespace QuizApi.Repositories
             }
 
             return null;
+        }
+
+        private async Task<int> GetCollectionCount(string collection, string filterField, string filterValue)
+        {
+            Query query = firestoreDb.Collection(collection)
+                .WhereEqualTo(filterField, filterValue)
+                .WhereEqualTo("RecordStatus", RecordStatusConstant.Active);
+
+            AggregateQuerySnapshot snapshot = await query.Count().GetSnapshotAsync();
+            return (int)(snapshot.Count ?? 0);
         }
     }
 }
