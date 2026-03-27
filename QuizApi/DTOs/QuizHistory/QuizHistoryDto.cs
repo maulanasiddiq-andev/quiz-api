@@ -18,7 +18,7 @@ namespace QuizApi.DTOs.QuizHistory
         public int Time { get; set; }
         public Timestamp QuizVersion { get; set; }
         public string UserId { get; set; } = string.Empty;
-        public UserDto? User { get; set; }
+        public SimpleUserDto? User { get; set; }
         public List<QuestionHistoryDto> Questions { get; set; }
         public int QuestionCount { get; set; }        
         public int Duration { get; set; }        
