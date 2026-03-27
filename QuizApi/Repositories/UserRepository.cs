@@ -19,20 +19,17 @@ namespace QuizApi.Repositories
     {
         private readonly FirestoreDb firestoreDb;
         private readonly string CollectionName = "user";
-        private readonly QuizAppDBContext dBContext;
         private readonly IMapper mapper;
         private readonly ActionModelHelper actionModelHelper;
         private readonly string userId = "";
         // private readonly string tableName = "User";
         public UserRepository(
             [FromKeyedServices("quiz-db")] FirestoreDb firestoreDb,
-            QuizAppDBContext dBContext,
             IMapper mapper,
             IHttpContextAccessor httpContextAccessor
         )
         {
             this.firestoreDb = firestoreDb;
-            this.dBContext = dBContext;
             this.mapper = mapper;
             actionModelHelper = new ActionModelHelper();
 

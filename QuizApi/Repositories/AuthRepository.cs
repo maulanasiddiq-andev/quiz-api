@@ -1,7 +1,6 @@
 using AutoMapper;
 using Google.Apis.Auth;
 using Google.Cloud.Firestore;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using QuizApi.Constants;
 using QuizApi.DTOs.Auth;
@@ -9,10 +8,8 @@ using QuizApi.DTOs.Identity;
 using QuizApi.Exceptions;
 using QuizApi.Extensions;
 using QuizApi.Helpers;
-using QuizApi.Models;
 using QuizApi.Models.Auth;
 using QuizApi.Models.Identity;
-using QuizApi.Queue;
 using QuizApi.Services;
 using QuizApi.Settings;
 

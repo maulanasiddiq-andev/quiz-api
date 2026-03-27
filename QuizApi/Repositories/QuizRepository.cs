@@ -23,7 +23,6 @@ namespace QuizApi.Repositories
     public class QuizRepository
     {
         private readonly FirestoreDb firestoreDb;
-        private readonly QuizAppDBContext dBContext;
         private readonly IMapper mapper;
         private readonly string userId = "";
         private readonly ActionModelHelper actionModelHelper;
@@ -32,7 +31,6 @@ namespace QuizApi.Repositories
         private readonly UserRepository userRepository;
         public QuizRepository(
             [FromKeyedServices("quiz-db")] FirestoreDb firestoreDb,
-            QuizAppDBContext dBContext,
             IMapper mapper,
             IHttpContextAccessor httpContextAccessor,
             CategoryRepository categoryRepository,
@@ -40,7 +38,6 @@ namespace QuizApi.Repositories
         )
         {
             this.firestoreDb = firestoreDb;
-            this.dBContext = dBContext;
             this.mapper = mapper;
             this.categoryRepository = categoryRepository;
             this.userRepository = userRepository;
@@ -114,6 +111,12 @@ namespace QuizApi.Repositories
                 {
                     dto.Category = await categoryRepository.GetDataByIdAsync(dto.CategoryId);
                 }
+
+                if (dto.UserId != null)
+                {
+                    dto.User = await userRepository.GetSimpleUserDtoAsync(dto.UserId);
+                }
+
                 dto.QuestionCount = await GetCollectionCount("question", "QuizId", quiz.QuizId);
                 dto.HistoriesCount = await GetCollectionCount("quizhistory", "QuizId", quiz.QuizId);
                 
