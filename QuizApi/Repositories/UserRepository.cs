@@ -22,15 +22,18 @@ namespace QuizApi.Repositories
         private readonly IMapper mapper;
         private readonly ActionModelHelper actionModelHelper;
         private readonly string userId = "";
+        private readonly RoleRepository roleRepository;
         // private readonly string tableName = "User";
         public UserRepository(
             [FromKeyedServices("quiz-db")] FirestoreDb firestoreDb,
             IMapper mapper,
-            IHttpContextAccessor httpContextAccessor
+            IHttpContextAccessor httpContextAccessor,
+            RoleRepository roleRepository
         )
         {
             this.firestoreDb = firestoreDb;
             this.mapper = mapper;
+            this.roleRepository = roleRepository;
             actionModelHelper = new ActionModelHelper();
 
             if (httpContextAccessor != null)
@@ -45,9 +48,6 @@ namespace QuizApi.Repositories
             CollectionReference usersRef = firestoreDb.Collection(CollectionName);
 
             // 2. Build the Query (Filtering)
-            // Note: Firestore doesn't support 'ILike' natively. 
-            // For simple "Starts With" you can use >= and <. 
-            // For full-text search, Google recommends Algolia or ElasticSearch.
             Query query = usersRef.WhereEqualTo("RecordStatus", RecordStatusConstant.Active);
 
             // 3. Ordering
@@ -58,11 +58,8 @@ namespace QuizApi.Repositories
                 query = query.OrderBy(orderByField);
 
             // 4. Execution & Pagination
-            // Firestore pagination uses "StartAfter". For simple Offset, we use Limit/Offset.
             QuerySnapshot snapshot = await query.GetSnapshotAsync();
             
-            // Manual filtering for "Not equal to current user" and "Search string" 
-            // (Firestore has limits on mixing multiple inequality filters)
             var allDocs = snapshot.Documents
                 .Select(d => d.ConvertTo<UserModel>())
                 .Where(u => u.UserId != userId);
@@ -96,9 +93,14 @@ namespace QuizApi.Repositories
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
 
-            UserDto categoryDto = mapper.Map<UserDto>(user);
+            UserDto userDto = mapper.Map<UserDto>(user);
 
-            return categoryDto;
+            if (userDto.RoleId != null)
+            {
+                userDto.Role = await roleRepository.GetDataByIdAsync(userDto.RoleId);
+            }
+
+            return userDto;
         }
 
         public async Task UpdateDataAsync(string id, UserDto userDto)
