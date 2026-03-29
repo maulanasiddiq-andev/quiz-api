@@ -1,3 +1,5 @@
+using Google.Cloud.Firestore;
+
 namespace QuizApi.Models.Identity
 {
     [FirestoreData]
