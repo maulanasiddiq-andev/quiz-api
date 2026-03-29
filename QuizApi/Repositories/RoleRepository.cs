@@ -46,44 +46,41 @@ namespace QuizApi.Repositories
         // GET search
         public async Task<SearchResponse> SearchDatasAsync(SearchRequestDto searchRequest)
         {
-            IQueryable<RoleModel> listRoleQuery = dBContext.Role
-                .Where(x => x.RecordStatus == RecordStatusConstant.Active)
-                .AsQueryable();
+            // 1. Reference the collection
+            CollectionReference rolesRef = firestoreDb.Collection("role");
 
-            #region Query
+            // 2. Build the Query (Filtering)
+            Query query = rolesRef.WhereEqualTo("RecordStatus", RecordStatusConstant.Active);
+
+            // 3. Ordering
+            string orderByField = searchRequest.OrderBy == "createdTime" ? "CreatedTime" : "Name";
+            if (searchRequest.OrderDir == "desc")
+                query = query.OrderByDescending(orderByField);
+            else
+                query = query.OrderBy(orderByField);
+
+            // 4. Execution & Pagination
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+            
+            var allDocs = snapshot.Documents
+                .Select(d => d.ConvertTo<RoleModel>());
+
             if (!string.IsNullOrWhiteSpace(searchRequest.Search))
             {
-                listRoleQuery = listRoleQuery.Where(x => EF.Functions.ILike(x.Name, $"%{searchRequest.Search}%"));
+                allDocs = allDocs.Where(u => u.Name.Contains(searchRequest.Search, StringComparison.OrdinalIgnoreCase));
             }
-            #endregion
 
-            #region Ordering
-            string orderBy = searchRequest.OrderBy;
-            string orderDir = searchRequest.OrderDir;
-
-            if (orderBy.Equals("createdTime"))
+            var response = new SearchResponse
             {
-                if (orderDir.Equals("asc"))
-                {
-                    listRoleQuery = listRoleQuery.OrderBy(x => x.CreatedTime).AsQueryable();
-                }
-                else if (orderDir.Equals("desc"))
-                {
-                    listRoleQuery = listRoleQuery.OrderByDescending(x => x.CreatedTime).AsQueryable();
-                }
-            }
-            #endregion
-
-            var response = new SearchResponse();
-            response.TotalItems = await listRoleQuery.CountAsync();
-            response.CurrentPage = searchRequest.CurrentPage;
-            response.PageSize = searchRequest.PageSize;
+                TotalItems = allDocs.Count(),
+                CurrentPage = searchRequest.CurrentPage,
+                PageSize = searchRequest.PageSize
+            };
 
             var skip = searchRequest.PageSize * searchRequest.CurrentPage;
-            var take = searchRequest.PageSize;
-            var listRole = await listRoleQuery.Skip(skip).Take(take).ToListAsync();
+            var pagedList = allDocs.Skip(skip).Take(searchRequest.PageSize).ToList();
 
-            response.Items = mapper.Map<List<RoleDto>>(listRole);
+            response.Items = mapper.Map<List<RoleDto>>(pagedList);
 
             return response;
         }
@@ -174,7 +171,10 @@ namespace QuizApi.Repositories
             {
                 // if there is not any main role
                 // throw
-                if (await dBContext.Role.AnyAsync(x => x.IsMain == true) == false)
+                Query query = firestoreDb.Collection("role").WhereEqualTo("IsMain", true).Limit(1);
+                QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+                if (snapshot.Documents.Count == 0)
                 {
                     throw new KnownException("Pilih satu role sebagai role default");
                 }
@@ -182,8 +182,7 @@ namespace QuizApi.Repositories
 
             actionModelHelper.AssignCreateModel(role, tableName, userId);
 
-            await dBContext.AddAsync(role);
-            await dBContext.SaveChangesAsync();
+            await firestoreDb.Collection("role").AddAsync(role);
         }
 
         // PUT update role by id
@@ -218,7 +217,10 @@ namespace QuizApi.Repositories
             else
             {
                 // if there is not main role, throw
-                if (await dBContext.Role.AnyAsync(x => x.RoleId != roleId && x.IsMain == true) == false)
+                Query query = firestoreDb.Collection("role").WhereEqualTo("IsMain", true).Limit(1);
+                QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+                if (snapshot.Documents.Count == 0)
                 {
                     throw new KnownException("Pilih satu role sebagai role default");
                 }
@@ -277,31 +279,43 @@ namespace QuizApi.Repositories
 
         public async Task DeleteDataAsync(string id)
         {
-            RoleModel? role = await GetActiveRoleByIdAsync(id);
+            Query query = firestoreDb.Collection("role").WhereEqualTo("RoleId", id).Limit(1);
 
-            if (role is null)
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Documents.Count == 0)
             {
                 throw new KnownException(ErrorMessageConstant.DataNotFound);
             }
+
+            DocumentSnapshot doc = snapshot.Documents[0];
+            RoleModel role = doc.ConvertTo<RoleModel>();
 
             if (role.IsMain == true)
             {
                 throw new KnownException("Pilih satu role sebagai role default");
             }
 
+            WriteBatch batch = firestoreDb.StartBatch();
+
             actionModelHelper.AssignDeleteModel(role, userId);
 
-            dBContext.Update(role);
-            await dBContext.SaveChangesAsync();
+            batch.Set(doc.Reference, role);
+            await batch.CommitAsync();
         }
 
         private async Task<RoleModel?> GetActiveRoleByIdAsync(string id)
         {
-            RoleModel? role = await dBContext.Role
-                .Where(x => x.RoleId.Equals(id) && x.RecordStatus == RecordStatusConstant.Active)
-                .FirstOrDefaultAsync();
+            Query query = firestoreDb.Collection("role").WhereEqualTo("RoleId", id).Limit(1);
 
-            return role;
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Documents.Count == 0)
+            {
+                return null;
+            }
+
+            return snapshot.Documents[0].ConvertTo<RoleModel>();
         }
     }
 }
