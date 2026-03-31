@@ -20,7 +20,7 @@ namespace QuizApi.DTOs.Identity
         public RoleUpdateValidator()
         {
             RuleFor(x => x.Name).NotEmpty().WithMessage("Nama role tidak boleh kosong");
-            RuleFor(x => x.Version).NotNull().NotEmpty().WithMessage("Version role tidak boleh kosong");
+            // RuleFor(x => x.Version).NotNull().NotEmpty().WithMessage("Version role tidak boleh kosong");
         }
     }
 }

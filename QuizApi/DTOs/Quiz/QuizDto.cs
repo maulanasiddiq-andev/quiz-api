@@ -46,7 +46,7 @@ namespace QuizApi.DTOs.Quiz
     {
         public QuizEditValidator()
         {
-            RuleFor(x => x.Version).NotNull().NotEmpty().WithMessage("Kategori harus diisi");
+            // RuleFor(x => x.Version).NotNull().NotEmpty().WithMessage("Kategori harus diisi");
             RuleFor(x => x.CategoryId).NotEmpty().WithMessage("Kategori harus diisi");
             RuleFor(x => x.Title).NotEmpty().WithMessage("Judul harus diisi");
             RuleFor(x => x.Time)

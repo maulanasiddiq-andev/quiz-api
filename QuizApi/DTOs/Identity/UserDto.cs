@@ -42,7 +42,7 @@ namespace QuizApi.DTOs.Identity
         {
             RuleFor(x => x.Email).NotEmpty().WithMessage("Email harus diisi");
             RuleFor(x => x.Name).NotEmpty().WithMessage("Nama harus diisi");
-            RuleFor(x => x.Version).NotNull().NotEmpty().WithMessage("Version harus diisi");
+            // RuleFor(x => x.Version).NotNull().NotEmpty().WithMessage("Version harus diisi");
         }
     }
 }
